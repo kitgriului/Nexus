@@ -1,0 +1,8 @@
+{
+  "name": "Nexus Archive",
+  "description": "A minimalist AI-powered archival tool for audio and video materials with deep semantic markup and smart navigation.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
