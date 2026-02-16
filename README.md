@@ -39,8 +39,8 @@ PostgreSQL + pgvector | MinIO (S3)
 ### Prerequisites
 
 - Docker & Docker Compose
-- OpenAI API key (for Whisper API fallback, optional)
-- Google Gemini API key
+- Google Gemini API key (for AI features like summaries and tags) - [Get it](https://aistudio.google.com/app/apikey)
+- FFmpeg (for audio processing, included in Docker images)
 
 ### 1. Clone & Configure
 
@@ -85,11 +85,12 @@ CORS_ORIGINS=["http://localhost:3000","http://localhost:5173"]
 docker-compose up -d
 ```
 
-Services:
-- Frontend: http://localhost:5173
-- API: http://localhost:8000
-- API Docs: http://localhost:8000/docs
-- MinIO Console: http://localhost:9001
+### Services
+
+- **Frontend (React + Vite)**: http://localhost:5173 - Web UI for recording, uploading, searching
+- **API (FastAPI)**: http://localhost:8000 - REST API and WebSocket
+- **API Docs**: http://localhost:8000/docs - Interactive Swagger documentation
+- **MinIO Console**: http://localhost:9001 - Object storage management (login: minioadmin/minioadmin)
 
 ### 3. Use the App
 

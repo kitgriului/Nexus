@@ -1,5 +1,18 @@
 # ✅ Что сделано
 
+## v2.0 Release - Production Fixes (2026-02-17)
+
+### ✅ Исправлены критические ошибки запуска
+- **Frontend port**: Выровнялся Vite dev сервер на порт 5173 (вместо 3000) для совместимости с docker-compose
+- **SQLAlchemy 2.x compatibility**: Обёрнуты raw SQL запросы в `text()` для поддержки SQLAlchemy 2.0+
+- **Gemini SDK**: Обновлена интеграция с новой библиотекой `google-genai` (вместо устаревшей `google-generativeai`)
+- **Database indexes**: Разрешены конфликты имён индексов (idx_status → idx_media_status/idx_job_status)
+- **API routing**: Переключены API URLs на относительные пути (`/api`) для корректной работы в Docker
+- **Docker config**: Переключен Whisper в local режим по умолчанию (не требует OpenAI ключа)
+- **Documentation**: Обновлены инструкции по портам и конфигурации
+
+Результат: Приложение полностью собирается, все сервисы запускаются, API доступен на http://localhost:8000, UI на http://localhost:5173
+
 ## Выполненные задачи из твоего запроса:
 
 ### 1. ✅ Убрал старый код

@@ -2,7 +2,29 @@
 
 All notable changes to Nexus will be documented in this file.
 
-## [2.0.0] - 2026-02-16
+## [2.0.0] - 2026-02-17
+
+### 🔧 Bug Fixes & Production Readiness
+
+Critical fixes to ensure proper deployment and functionality:
+
+#### Fixed Issues
+- **Frontend Port**: Corrected Vite dev server port from 3000 to 5173 (matches docker-compose mapping)
+- **SQLAlchemy 2.x**: All raw SQL queries now wrapped in `text()` for compatibility  
+- **Gemini Integration**: Updated to google-genai client library
+- **Database Indexes**: Resolved duplicate index name conflicts
+- **API Routing**: Fixed relative paths for proper Docker networking
+- **Whisper Mode**: Switched to local mode by default (no API key required)
+
+#### Status
+- ✅ Docker builds and all services start successfully
+- ✅ API endpoints functional at http://localhost:8000/docs
+- ✅ Frontend accessible at http://localhost:5173
+- ⚠️ AI features require GEMINI_API_KEY (set in .env)
+
+---
+
+## [2.0.0 Initial] - 2026-02-16
 
 ### 🎉 Complete Architecture Rewrite
 
