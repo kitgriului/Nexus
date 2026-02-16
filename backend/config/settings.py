@@ -50,7 +50,7 @@ class Settings(BaseSettings):
     MAX_DURATION_MINUTES: int = 180  # 3 hours
     
     # Security
-    CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://localhost:3000"]
+    CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://localhost:8000"]
     SECRET_KEY: str = "changeme-in-production"
     
     # Paths
