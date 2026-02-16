@@ -126,7 +126,7 @@ docker-compose logs worker
 
 ### 6️⃣ Открыть приложение
 
-- **Frontend**: http://localhost:3000
+- **Frontend**: http://localhost:5173
 - **API Docs**: http://localhost:8000/docs
 - **MinIO Console**: http://localhost:9001
   - Login: `minioadmin`
@@ -136,7 +136,7 @@ docker-compose logs worker
 
 ## 🎯 Быстрый тест
 
-1. Открой http://localhost:3000
+1. Открой http://localhost:5173
 2. Нажми **"Record"** (разреши микрофон)
 3. Скажи что-нибудь
 4. Нажми **"Stop"**
@@ -163,7 +163,7 @@ docker-compose logs worker
 ### Frontend не подключается к API
 Проверь в `.env`:
 ```env
-CORS_ORIGINS=["http://localhost:3000"]
+CORS_ORIGINS=["http://localhost:5173"]
 ```
 
 ### Transcription не работает
@@ -212,7 +212,7 @@ docker-compose down -v
 - [ ] Создан файл `.env` с ключами
 - [ ] Запущен `docker-compose up -d`
 - [ ] Все сервисы в статусе `Up`
-- [ ] Frontend открывается на http://localhost:3000
+- [ ] Frontend открывается на http://localhost:5173
 - [ ] API docs доступны на http://localhost:8000/docs
 - [ ] Тестовая запись обработалась успешно
 

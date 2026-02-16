@@ -2,9 +2,10 @@
 Gemini service for AI enrichment (summary, tags)
 """
 from typing import Dict, List
-import google.generativeai as genai
-from tenacity import retry, stop_after_attempt, wait_exponential
 import json
+from google import genai
+from google.genai import types
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 from backend.config.settings import settings
 
@@ -13,8 +14,8 @@ class GeminiService:
     """Google Gemini service for text enrichment"""
     
     def __init__(self):
-        genai.configure(api_key=settings.GEMINI_API_KEY)
-        self.model = genai.GenerativeModel('gemini-1.5-flash')
+        self.client = genai.Client(api_key=settings.GEMINI_API_KEY)
+        self.model = settings.GEMINI_MODEL
     
     @retry(
         stop=stop_after_attempt(3),
@@ -46,14 +47,16 @@ RETURN ONLY JSON with this structure:
 }}
 """
         
-        response = self.model.generate_content(
-            prompt,
-            generation_config=genai.GenerationConfig(
+        response = self.client.models.generate_content(
+            model=self.model,
+            contents=prompt,
+            config=types.GenerateContentConfig(
                 response_mime_type="application/json"
             )
         )
         
-        result = json.loads(response.text or '{}')
+        response_text = getattr(response, "text", None) or "{}"
+        result = json.loads(response_text)
         
         return {
             'ai_summary': result.get('aiSummary', ''),
@@ -76,6 +79,9 @@ USER QUESTION: {question}
 Answer the question using the provided context. If the context doesn't contain enough information, use your knowledge but mention the limitation.
 """
         
-        response = self.model.generate_content(prompt)
+        response = self.client.models.generate_content(
+            model=self.model,
+            contents=prompt
+        )
         
-        return response.text or "I couldn't process that request."
+        return getattr(response, "text", None) or "I couldn't process that request."

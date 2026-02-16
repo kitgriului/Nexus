@@ -86,7 +86,7 @@ docker-compose up -d
 ```
 
 Services:
-- Frontend: http://localhost:3000
+- Frontend: http://localhost:5173
 - API: http://localhost:8000
 - API Docs: http://localhost:8000/docs
 - MinIO Console: http://localhost:9001

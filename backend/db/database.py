@@ -5,7 +5,7 @@ import os
 from contextlib import contextmanager
 from typing import Generator
 
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import NullPool
 
@@ -71,7 +71,7 @@ def init_db():
     
     # Enable pgvector extension
     with engine.connect() as conn:
-        conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
+        conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         conn.commit()
     
     # Create all tables
@@ -80,17 +80,17 @@ def init_db():
     # Create vector index for embeddings (ivfflat)
     with engine.connect() as conn:
         # Check if index exists
-        result = conn.execute("""
+        result = conn.execute(text("""
             SELECT 1 FROM pg_indexes 
             WHERE indexname = 'idx_media_embedding'
-        """)
+        """))
         if not result.fetchone():
-            conn.execute("""
+            conn.execute(text("""
                 CREATE INDEX idx_media_embedding 
                 ON media_items 
                 USING ivfflat (embedding vector_cosine_ops)
                 WITH (lists = 100)
-            """)
+            """))
             conn.commit()
     
     print("✅ Database initialized successfully")

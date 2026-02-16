@@ -72,7 +72,7 @@ class MediaItem(Base):
     
     # Indexes
     __table_args__ = (
-        Index('idx_status', 'status'),
+        Index('idx_media_status', 'status'),
         Index('idx_created_at', 'created_at'),
         Index('idx_tags', 'tags', postgresql_using='gin'),
         # Vector similarity search index (created separately with ivfflat)
@@ -122,7 +122,7 @@ class ProcessingJob(Base):
     media_item: Mapped["MediaItem"] = relationship("MediaItem", back_populates="processing_jobs")
     
     __table_args__ = (
-        Index('idx_status', 'status'),
+        Index('idx_job_status', 'status'),
         Index('idx_celery_task_id', 'celery_task_id'),
     )
     

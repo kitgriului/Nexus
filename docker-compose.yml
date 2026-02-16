@@ -98,7 +98,7 @@ services:
       MINIO_SECRET_KEY: minioadmin
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       GEMINI_API_KEY: ${GEMINI_API_KEY}
-      WHISPER_MODE: api  # or 'local'
+      WHISPER_MODE: local  # or 'api'
       ENV: development
     depends_on:
       postgres:
@@ -118,9 +118,9 @@ services:
       dockerfile: Dockerfile
     container_name: nexus-frontend
     ports:
-      - "3000:3000"
+      - "5173:5173"
     environment:
-      VITE_API_URL: http://localhost:8000
+      VITE_API_URL: /api
     depends_on:
       - gateway
     volumes:
