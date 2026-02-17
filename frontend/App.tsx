@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import '../styles.css';
+import './styles.css';
 import { Icon } from './components/Icons';
 import { FeedItem } from './components/FeedItem';
 import { JobStatus } from './components/JobStatus';
