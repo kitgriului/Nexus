@@ -8,7 +8,7 @@ import './styles.css';
 import { Icon } from './components/Icons';
 import { FeedItem } from './components/FeedItem';
 import { JobStatus } from './components/JobStatus';
-import * as api from './api/client';
+import * as api from './apiClient/client';
 import wsService from './services/websocket';
 
 type Section = 'ALL' | 'AUDIO' | 'LINK' | 'CHAT';
@@ -54,24 +54,6 @@ const App: React.FC = () => {
   useEffect(() => {
     loadData();
     wsService.connect();
-
-    // WebSocket listeners for job updates
-    wsService.on('job_update', (update: any) => {
-      setProcessingJobs((prev) =>
-        prev.map((job) =>
-          job.id === update.job_id
-            ? { ...job, status: update.status, progress: update.progress }
-            : job
-        )
-      );
-
-      // Remove completed/error jobs after 3s
-      if (update.status === 'completed' || update.status === 'error') {
-        setTimeout(() => {
-          setProcessingJobs((prev) => prev.filter((j) => j.id !== update.job_id));
-        }, 3000);
-      }
-    });
 
     return () => {
       wsService.disconnect();

@@ -121,13 +121,15 @@ services:
       - "5173:5173"
     environment:
       VITE_API_URL: /api
+      VITE_API_TARGET: http://gateway:8000
     depends_on:
       - gateway
     volumes:
       - ./frontend:/app
-      - /app/node_modules
+      - node_modules_frontend:/app/node_modules
 
 volumes:
   postgres_data:
   minio_data:
   temp_data:
+  node_modules_frontend:

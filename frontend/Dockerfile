@@ -3,10 +3,10 @@ FROM node:20-alpine
 WORKDIR /app
 
 # Copy package files
-COPY package.json package-lock.json* ./
+COPY package.json ./
 
-# Install dependencies
-RUN npm install
+# Install dependencies with yarn (faster than npm)
+RUN yarn install --network-timeout 100000
 
 # Copy application code
 COPY . .
@@ -15,4 +15,4 @@ COPY . .
 EXPOSE 5173
 
 # Run dev server
-CMD ["npm", "run", "dev", "--", "--host"]
+CMD ["yarn", "dev", "--host"]
