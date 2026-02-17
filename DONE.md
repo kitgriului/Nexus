@@ -1,5 +1,38 @@
 # ✅ Что сделано
 
+## v2.1 Release - Chat & API Fixes (2026-02-17)
+
+### ✅ Исправлено: Chat endpoint возвращал 502 Bad Gateway
+**Проблема**: Chat endpoint (`POST /api/chat`) возвращал 502 вместо 200, несмотря на успешные запросы к БД.
+
+**Диагностика**:
+1. Проверили docker logs → видно, что SQL запросы выполняются успешно
+2. Проверили environment variables → GEMINI_API_KEY успешно загружен в контейнер (39 символов, формат "AIza...")
+3. Протестировали GeminiService напрямую в контейнере → получили ошибку:
+   ```
+   google.genai.errors.ClientError: 404 NOT_FOUND
+   models/gemini-2.0-flash-exp is not found for API version v1beta
+   ```
+
+**Решение**:
+- Запустили `client.models.list()` → получили список доступных моделей
+- Обнаружили, что `gemini-2.0-flash-exp` не существует (устаревшее имя)
+- Заменили на существующую модель `gemini-2.0-flash` в `backend/config/settings.py`:
+  ```python
+  GEMINI_MODEL: str = "gemini-2.0-flash"  # было: "gemini-2.0-flash-exp"
+  ```
+- Пересоздали контейнеры: `docker compose up -d --force-recreate gateway worker`
+
+**Результат**: ✅
+- `GET /api/health` → 200 OK
+- `GET /api/media` → 200 OK
+- `POST /api/search` → 200 OK  
+- `POST /api/chat` → 200 OK (теперь работает!)
+
+**Коммит**: `Fix: Replace invalid Gemini model (gemini-2.0-flash-exp) with supported gemini-2.0-flash model`
+
+---
+
 ## v2.0 Release - Production Fixes (2026-02-17)
 
 ### ✅ Исправлены критические ошибки запуска
