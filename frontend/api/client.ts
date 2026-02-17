@@ -176,15 +176,11 @@ export async function search(query: string, limit = 10, minSimilarity = 0.7): Pr
 /**
  * Chat with archive
  */
-export async function chat(message: string, history: any[] = [], maxResults = 5): Promise<ChatResponse> {
+export async function chat(request: { message: string, max_context_items?: number }): Promise<{ response: string; context_media_ids: string[] }> {
   const response = await fetch(`${API_BASE_URL}/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ 
-      message, 
-      conversation_history: history,
-      max_results: maxResults 
-    })
+    body: JSON.stringify(request)
   });
   
   if (!response.ok) {
