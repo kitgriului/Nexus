@@ -1,82 +1,84 @@
-import React, { useEffect, useState } from 'react';
-import wsService, { JobStatusUpdate } from '../services/websocket';
+import React from 'react';
 
 interface JobStatusProps {
   jobId: string;
-  onComplete?: (result: any) => void;
-  onError?: (error: string) => void;
+  status: 'pending' | 'processing' | 'completed' | 'error';
+  progress?: number;
 }
 
-export const JobStatus: React.FC<JobStatusProps> = ({ jobId, onComplete, onError }) => {
-  const [status, setStatus] = useState<JobStatusUpdate | null>(null);
-
-  useEffect(() => {
-    const handleUpdate = (update: JobStatusUpdate) => {
-      setStatus(update);
-
-      if (update.status === 'completed' && onComplete) {
-        onComplete(update.result);
-      }
-
-      if (update.status === 'failed' && onError) {
-        onError(update.error || 'Unknown error');
-      }
-    };
-
-    wsService.subscribe(jobId, handleUpdate);
-
-    return () => {
-      wsService.unsubscribe(jobId, handleUpdate);
-    };
-  }, [jobId, onComplete, onError]);
-
-  if (!status) {
-    return (
-      <div className="job-status pending">
-        <div className="spinner"></div>
-        <span>Initializing...</span>
-      </div>
-    );
-  }
-
-  const getStatusIcon = () => {
-    switch (status.status) {
+export const JobStatus: React.FC<JobStatusProps> = ({ jobId, status, progress }) => {
+  const getStatusInfo = () => {
+    switch (status) {
       case 'pending':
-        return '⏳';
+        return { emoji: '⏳', text: 'Pending', color: '#fbb034' };
       case 'processing':
-        return '⚙️';
+        return { emoji: '⚙️', text: `Processing${progress ? ` (${progress}%)` : ''}`, color: '#4b90e2' };
       case 'completed':
-        return '✅';
-      case 'failed':
-        return '❌';
+        return { emoji: '✅', text: 'Completed', color: '#7ed321' };
+      case 'error':
+        return { emoji: '❌', text: 'Error', color: '#d0021b' };
       default:
-        return '❓';
+        return { emoji: '❓', text: 'Unknown', color: '#999' };
     }
   };
 
-  const getStatusText = () => {
-    if (status.stage) {
-      return status.stage;
-    }
-    return status.status.charAt(0).toUpperCase() + status.status.slice(1);
-  };
+  const info = getStatusInfo();
 
   return (
-    <div className={`job-status ${status.status}`}>
-      <div className="status-header">
-        <span className="status-icon">{getStatusIcon()}</span>
-        <span className="status-text">{getStatusText()}</span>
+    <div
+      style={{
+        background: '#ffffff',
+        border: `1px solid ${info.color}20`,
+        borderRadius: '12px',
+        padding: '12px 16px',
+        marginBottom: '12px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '12px',
+      }}
+    >
+      {/* Status Icon */}
+      <div style={{ fontSize: '20px', flexShrink: 0, animation: status === 'processing' ? 'spin 1s linear infinite' : 'none' }}>
+        {info.emoji}
       </div>
-      
-      {status.progress !== undefined && (
-        <div className="progress-bar">
-          <div 
-            className="progress-fill" 
-            style={{ width: `${status.progress}%` }}
-          />
-          <span className="progress-text">{status.progress}%</span>
+
+      {/* Status Info */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: '13px', fontWeight: 600, color: '#1a1a1a' }}>
+          {info.text}
         </div>
-      )}
+
+        {/* Progress Bar */}
+        {progress !== undefined && (
+          <div
+            style={{
+              width: '100%',
+              height: '4px',
+              background: '#e5e5e5',
+              borderRadius: '2px',
+              marginTop: '6px',
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              style={{
+                height: '100%',
+                background: info.color,
+                width: `${progress}%`,
+                transition: 'width 0.3s ease',
+              }}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* ID (small) */}
+      <div style={{ fontSize: '11px', color: '#999', whiteSpace: 'nowrap', flexShrink: 0 }}>
+        {jobId.slice(0, 8)}...
+      </div>
+    </div>
+  );
+};
 
       {status.status === 'failed' && status.error && (
         <div className="error-message">

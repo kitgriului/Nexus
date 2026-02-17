@@ -1,68 +1,111 @@
 /**
- * Nexus v2.0 - Full backend integration with WebSocket
+ * Nexus v2.1 - AI Media Archive
+ * Complete redesign with Apple/OpenAI aesthetic
  */
+
 import React, { useState, useEffect, useRef } from 'react';
+import '../styles.css';
 import { Icon } from './components/Icons';
 import { FeedItem } from './components/FeedItem';
 import { JobStatus } from './components/JobStatus';
 import * as api from './api/client';
 import wsService from './services/websocket';
 
+type Section = 'ALL' | 'AUDIO' | 'LINK' | 'CHAT';
+
+interface ProcessingJob {
+  id: string;
+  status: 'pending' | 'processing' | 'completed' | 'error';
+  progress?: number;
+}
+
 const App: React.FC = () => {
-  const [activeSection, setActiveSection] = useState<'ALL' | 'AUDIO' | 'LINK' | 'CHAT'>('ALL');
+  const [activeSection, setActiveSection] = useState<Section>('ALL');
   const [media, setMedia] = useState<api.MediaItem[]>([]);
   const [chatHistory, setChatHistory] = useState<any[]>([]);
-  const [chatInput, setChatInput] = useState("");
+  const [chatInput, setChatInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
-  const [processingJobs, setProcessingJobs] = useState<string[]>([]);
-  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  const [processingJobs, setProcessingJobs] = useState<ProcessingJob[]>([]);
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const mediaRecorder = useRef<MediaRecorder | null>(null);
   const audioChunks = useRef<Blob[]>([]);
 
+  // Load initial data
   const loadData = async () => {
     try {
+      setError(null);
       const items = await api.getMedia();
       setMedia(items);
-      
-      const history = await api.getChatHistory();
-      setChatHistory(history);
-      
-      setTimeout(() => (window as any).lucide?.createIcons(), 0);
-    } catch (error) {
-      console.error('Failed to load data:', error);
+
+      if (activeSection === 'CHAT') {
+        const history = await api.getChatHistory();
+        setChatHistory(history);
+      }
+    } catch (err) {
+      console.error('Failed to load data:', err);
+      setError('Failed to load data. Please try again.');
     }
   };
 
+  // Initialize
   useEffect(() => {
     loadData();
     wsService.connect();
-    
+
+    // WebSocket listeners for job updates
+    wsService.on('job_update', (update: any) => {
+      setProcessingJobs((prev) =>
+        prev.map((job) =>
+          job.id === update.job_id
+            ? { ...job, status: update.status, progress: update.progress }
+            : job
+        )
+      );
+
+      // Remove completed/error jobs after 3s
+      if (update.status === 'completed' || update.status === 'error') {
+        setTimeout(() => {
+          setProcessingJobs((prev) => prev.filter((j) => j.id !== update.job_id));
+        }, 3000);
+      }
+    });
+
     return () => {
       wsService.disconnect();
     };
   }, []);
 
+  // Refresh data when section changes
+  useEffect(() => {
+    loadData();
+  }, [activeSection]);
+
+  // Audio Recording
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
       mediaRecorder.current = recorder;
       audioChunks.current = [];
-      recorder.ondataavailable = (e) => { 
-        if (e.data.size > 0) audioChunks.current.push(e.data); 
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunks.current.push(e.data);
       };
+
       recorder.onstop = () => {
         const blob = new Blob(audioChunks.current, { type: 'audio/webm' });
-        processAudioBlob(blob);
-        stream.getTracks().forEach(t => t.stop());
+        handleAudioBlob(blob);
+        stream.getTracks().forEach((t) => t.stop());
       };
+
       recorder.start();
       setIsRecording(true);
-    } catch (e) { 
-      alert("Error: Microphone access denied."); 
+    } catch (err) {
+      setError('Microphone access denied');
+      console.error(err);
     }
   };
 
@@ -71,116 +114,127 @@ const App: React.FC = () => {
     setIsRecording(false);
   };
 
-  const processAudioBlob = async (blob: Blob) => {
+  const handleAudioBlob = async (blob: Blob) => {
     try {
-      const file = new File([blob], "recording.webm", { type: blob.type });
+      const file = new File([blob], 'recording.webm', { type: blob.type });
       const response = await api.processUpload(file, 'Audio Recording');
-      
-      // Track job with WebSocket
-      setProcessingJobs(prev => [...prev, response.job_id]);
-      
-    } catch (error) {
-      console.error('Upload failed:', error);
-      alert(`Upload failed: ${error}`);
+
+      const job: ProcessingJob = {
+        id: response.job_id,
+        status: 'pending',
+      };
+      setProcessingJobs((prev) => [...prev, job]);
+
+      // Reload media after processing
+      setTimeout(() => loadData(), 5000);
+    } catch (err) {
+      setError('Failed to upload recording');
+      console.error(err);
     }
   };
 
+  // File Upload
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const response = await api.processUpload(file, file.name);
+
+      const job: ProcessingJob = {
+        id: response.job_id,
+        status: 'pending',
+      };
+      setProcessingJobs((prev) => [...prev, job]);
+
+      setTimeout(() => loadData(), 5000);
+    } catch (err) {
+      setError(`Upload failed: ${err}`);
+      console.error(err);
+    }
+
+    event.target.value = '';
+  };
+
+  // URL Processing
   const processUrl = async (url: string) => {
     try {
-      const response = await api.processUrl(url);
-      setProcessingJobs(prev => [...prev, response.job_id]);
-    } catch (error) {
-      console.error('URL processing failed:', error);
-      alert(`Processing failed: ${error}`);
+      const response = await api.processUrl(url, url);
+
+      const job: ProcessingJob = {
+        id: response.job_id,
+        status: 'pending',
+      };
+      setProcessingJobs((prev) => [...prev, job]);
+
+      setTimeout(() => loadData(), 5000);
+    } catch (err) {
+      setError(`Failed to process URL: ${err}`);
+      console.error(err);
     }
   };
 
-  const handleJobComplete = (jobId: string, result: any) => {
-    setProcessingJobs(prev => prev.filter(id => id !== jobId));
-    loadData();
-  };
-
-  const handleJobError = (jobId: string, error: string) => {
-    setProcessingJobs(prev => prev.filter(id => id !== jobId));
-    alert(`Processing failed: ${error}`);
-  };
-
-  const handleTagClick = (tag: string) => {
-    setSelectedTag(tag === selectedTag ? null : tag);
-  };
-
+  // Chat
   const handleChatSubmit = async () => {
-    if (!chatInput.trim()) return;
-    
-    const userMsg = chatInput.trim();
-    setChatInput("");
-    setIsTyping(true);
-    
-    setChatHistory(prev => [...prev, { role: "user", content: userMsg, timestamp: new Date().toISOString() }]);
-    
+    if (!chatInput.trim() || isTyping) return;
+
     try {
-      const response = await api.chat(userMsg, chatHistory);
-      setChatHistory(prev => [...prev, { 
-        role: "assistant", 
-        content: response.answer, 
-        sources: response.sources,
-        timestamp: new Date().toISOString() 
-      }]);
-    } catch (error) {
-      console.error('Chat failed:', error);
-      setChatHistory(prev => [...prev, { 
-        role: "assistant", 
-        content: "Sorry, something went wrong.", 
-        timestamp: new Date().toISOString() 
-      }]);
+      setIsTyping(true);
+      setError(null);
+
+      const userMsg = { role: 'user', text: chatInput };
+      setChatHistory((prev) => [...prev, userMsg]);
+      setChatInput('');
+
+      const response = await api.chat({ message: chatInput });
+
+      setChatHistory((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          text: response.response,
+          context_media_ids: response.context_media_ids,
+        },
+      ]);
+    } catch (err) {
+      setError('Failed to send message');
+      console.error(err);
     } finally {
       setIsTyping(false);
     }
   };
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    
-    try {
-      const response = await api.processUpload(file, file.name);
-      setProcessingJobs(prev => [...prev, response.job_id]);
-    } catch (error) {
-      console.error('Upload failed:', error);
-      alert(`Upload failed: ${error}`);
-    }
-    
-    event.target.value = '';
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!confirm('Delete this item?')) return;
-    try {
-      await api.deleteMedia(id);
-      await loadData();
-    } catch (error) {
-      console.error('Delete failed:', error);
-      alert('Failed to delete item');
-    }
-  };
-
-  // Filter media
-  const filteredMedia = media.filter(item => {
+  // Filters
+  const filteredMedia = media.filter((item) => {
     if (selectedTag && !item.tags?.includes(selectedTag)) return false;
-    if (activeSection === 'AUDIO' && item.media_type !== 'audio') return false;
-    if (activeSection === 'LINK' && item.media_type !== 'link') return false;
+    if (activeSection === 'AUDIO' && item.type !== 'audio') return false;
+    if (activeSection === 'LINK' && item.type !== 'youtube') return false;
     return true;
   });
 
-  // Collect all tags
-  const allTags = Array.from(new Set(media.flatMap(item => item.tags || [])));
+  const allTags = Array.from(new Set(media.flatMap((item) => item.tags || [])));
 
   return (
     <div className="nexus-app">
       {/* Header */}
-      <header className="header">
-        <h1>📦 Nexus</h1>
-        <div className="header-actions">
+      <header className="app-header">
+        <h1>
+          <span>🔍</span> Nexus
+        </h1>
+
+        <div className="nav-tabs">
+          {(['ALL', 'AUDIO', 'LINK', 'CHAT'] as Section[]).map((section) => (
+            <button
+              key={section}
+              className={`nav-tab ${activeSection === section ? 'active' : ''}`}
+              onClick={() => setActiveSection(section)}
+            >
+              {section}
+            </button>
+          ))}
+        </div>
+
+        <div className="header-controls">
           <input
             type="file"
             id="file-upload"
@@ -188,131 +242,181 @@ const App: React.FC = () => {
             onChange={handleFileUpload}
             style={{ display: 'none' }}
           />
-          <button onClick={() => document.getElementById('file-upload')?.click()}>
-            <Icon name="upload" /> Upload
+          <button
+            className="btn"
+            onClick={() => document.getElementById('file-upload')?.click()}
+            title="Upload audio or video file"
+          >
+            <span>📤</span> Upload
           </button>
+
           {!isRecording ? (
-            <button onClick={startRecording} className="record-btn">
-              <Icon name="mic" /> Record
+            <button
+              className="btn record"
+              onClick={startRecording}
+              title="Start recording audio"
+            >
+              <span>🎙️</span> Record
             </button>
           ) : (
-            <button onClick={stopRecording} className="recording-btn">
-              <Icon name="stop-circle" /> Stop
+            <button
+              className="btn record"
+              onClick={stopRecording}
+              title="Stop recording"
+              style={{ background: '#c53030' }}
+            >
+              <span>⏹️</span> Stop
             </button>
           )}
         </div>
       </header>
 
-      {/* Processing Jobs */}
-      {processingJobs.length > 0 && (
-        <div className="processing-panel">
-          {processingJobs.map(jobId => (
-            <JobStatus
-              key={jobId}
-              jobId={jobId}
-              onComplete={(result) => handleJobComplete(jobId, result)}
-              onError={(error) => handleJobError(jobId, error)}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* Navigation */}
-      <nav className="nav-tabs">
-        {['ALL', 'AUDIO', 'LINK', 'CHAT'].map(section => (
+      {/* Error Banner */}
+      {error && (
+        <div
+          style={{
+            padding: '12px 24px',
+            background: '#fee',
+            color: '#c53030',
+            border: '1px solid #fcc',
+            fontSize: '13px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}
+        >
+          <span>{error}</span>
           <button
-            key={section}
-            className={activeSection === section ? 'active' : ''}
-            onClick={() => setActiveSection(section as any)}
+            onClick={() => setError(null)}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: '16px',
+            }}
           >
-            {section}
+            ✕
           </button>
-        ))}
-      </nav>
-
-      {/* Tags Filter */}
-      {allTags.length > 0 && activeSection !== 'CHAT' && (
-        <div className="tags-filter">
-          {allTags.map(tag => (
-            <button
-              key={tag}
-              className={`tag ${selectedTag === tag ? 'selected' : ''}`}
-              onClick={() => handleTagClick(tag)}
-            >
-              #{tag}
-            </button>
-          ))}
-          {selectedTag && (
-            <button className="clear-filter" onClick={() => setSelectedTag(null)}>
-              Clear Filter
-            </button>
-          )}
         </div>
       )}
 
-      {/* Content */}
-      <main className="content">
-        {activeSection === 'CHAT' ? (
-          <div className="chat-container">
-            <div className="chat-messages">
-              {chatHistory.map((msg, idx) => (
-                <div key={idx} className={`chat-message ${msg.role}`}>
-                  <div className="message-content">{msg.content}</div>
-                  {msg.sources && msg.sources.length > 0 && (
-                    <div className="message-sources">
-                      <small>Sources:</small>
-                      {msg.sources.map((src: any, i: number) => (
-                        <div key={i} className="source">
-                          {src.title} (score: {src.score.toFixed(2)})
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+      {/* Main Content */}
+      <div className="main-content">
+        {/* Sidebar with Tags */}
+        {activeSection !== 'CHAT' && allTags.length > 0 && (
+          <div className="sidebar">
+            <div className="sidebar-header">Tags</div>
+            <div className="tag-list">
+              <button
+                className={`tag-item ${selectedTag === null ? 'active' : ''}`}
+                onClick={() => setSelectedTag(null)}
+              >
+                All
+              </button>
+              {allTags.map((tag) => (
+                <button
+                  key={tag}
+                  className={`tag-item ${selectedTag === tag ? 'active' : ''}`}
+                  onClick={() => setSelectedTag(tag)}
+                >
+                  #{tag}
+                </button>
               ))}
-              {isTyping && <div className="chat-message assistant typing">Thinking...</div>}
             </div>
-            <div className="chat-input-container">
+          </div>
+        )}
+
+        {/* Chat Section */}
+        {activeSection === 'CHAT' ? (
+          <div className="chat-section" style={{ flex: 1 }}>
+            <div className="chat-messages">
+              {chatHistory.length === 0 ? (
+                <div className="empty-state">
+                  <div className="empty-state-icon">💬</div>
+                  <div>Ask questions about your media archive...</div>
+                </div>
+              ) : (
+                chatHistory.map((msg, idx) => (
+                  <div key={idx} className={`chat-message ${msg.role}`}>
+                    <div className="message-bubble">
+                      {msg.text}
+                      {msg.context_media_ids && msg.context_media_ids.length > 0 && (
+                        <div className="message-sources">
+                          <small>Sources: {msg.context_media_ids.join(', ')}</small>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+              {isTyping && (
+                <div className="chat-message assistant">
+                  <div className="message-bubble">Thinking...</div>
+                </div>
+              )}
+            </div>
+
+            <div className="chat-input-section">
               <input
                 type="text"
+                className="chat-input"
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleChatSubmit()}
-                placeholder="Ask anything about your media..."
+                placeholder="Ask anything about your archive..."
                 disabled={isTyping}
               />
-              <button onClick={handleChatSubmit} disabled={isTyping || !chatInput.trim()}>
-                <Icon name="send" />
+              <button
+                className="send-btn"
+                onClick={handleChatSubmit}
+                disabled={isTyping || !chatInput.trim()}
+              >
+                <span>→</span>
               </button>
             </div>
           </div>
         ) : (
-          <div className="media-feed">
+          /* Feed Section */
+          <div className="feed-container">
+            {/* Processing Jobs */}
+            {processingJobs.length > 0 && (
+              <div style={{ marginBottom: '12px' }}>
+                {processingJobs.map((job) => (
+                  <JobStatus key={job.id} jobId={job.id} status={job.status} progress={job.progress} />
+                ))}
+              </div>
+            )}
+
+            {/* Media Feed */}
             {filteredMedia.length === 0 ? (
               <div className="empty-state">
-                <p>No media yet. Record something or add a link!</p>
+                <div className="empty-state-icon">📦</div>
+                <div>
+                  {media.length === 0
+                    ? 'No media yet. Record something or add a link!'
+                    : 'No items match your filter.'}
+                </div>
               </div>
             ) : (
-              filteredMedia.map(item => (
+              filteredMedia.map((item) => (
                 <FeedItem
                   key={item.id}
                   item={item}
-                  onDelete={handleDelete}
-                  isSelected={selectedItemId === item.id}
-                  onSelect={() => setSelectedItemId(item.id === selectedItemId ? null : item.id)}
+                  onClick={() => {}}
+                  onTagClick={(tag) => setSelectedTag(tag)}
                 />
               ))
             )}
           </div>
         )}
-      </main>
+      </div>
 
       {/* URL Input (floating) */}
       {activeSection === 'LINK' && (
         <div className="url-input-container">
           <input
             type="text"
-            placeholder="Paste YouTube/podcast/audio URL..."
+            placeholder="Paste YouTube/podcast URL..."
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 const url = (e.target as HTMLInputElement).value.trim();
