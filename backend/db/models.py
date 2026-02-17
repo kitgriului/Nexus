@@ -63,6 +63,14 @@ class MediaItem(Base):
     # Storage reference
     minio_path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     
+    # Origin tracking
+    origin: Mapped[str] = mapped_column(String(50), default='manual')  # manual or subscription
+    subscription_id: Mapped[Optional[str]] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey('subscriptions.id', ondelete='SET NULL'),
+        nullable=True
+    )
+    
     # Relationships
     processing_jobs: Mapped[List["ProcessingJob"]] = relationship(
         "ProcessingJob", 

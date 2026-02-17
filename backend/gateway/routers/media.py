@@ -47,6 +47,8 @@ class MediaResponse(BaseModel):
     tags: List[str]
     status: str
     created_at: datetime
+    origin: str
+    subscription_id: Optional[str]
     
     class Config:
         from_attributes = True

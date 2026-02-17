@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 
 from backend.config.settings import settings
 from backend.db.database import init_db
-from backend.gateway.routers import media, search, chat, health, websocket
+from backend.gateway.routers import media, search, chat, health, websocket, subscriptions
 
 
 @asynccontextmanager
@@ -44,6 +44,7 @@ app.include_router(health.router, prefix=settings.API_PREFIX, tags=["health"])
 app.include_router(media.router, prefix=settings.API_PREFIX, tags=["media"])
 app.include_router(search.router, prefix=settings.API_PREFIX, tags=["search"])
 app.include_router(chat.router, prefix=settings.API_PREFIX, tags=["chat"])
+app.include_router(subscriptions.router, prefix=settings.API_PREFIX, tags=["subscriptions"])
 app.include_router(websocket.router, tags=["websocket"])
 
 

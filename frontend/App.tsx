@@ -9,10 +9,11 @@ import { Icon } from './components/Icons';
 import { FeedItem } from './components/FeedItem';
 import { DetailView } from './components/DetailView';
 import { JobStatus } from './components/JobStatus';
+import { FeedView } from './components/FeedView';
 import * as api from './apiClient/client';
 import wsService from './services/websocket';
 
-type Section = 'ALL' | 'AUDIO' | 'LINK' | 'CHAT';
+type Section = 'ALL' | 'AUDIO' | 'LINK' | 'CHAT' | 'FEED';
 
 interface ProcessingJob {
   id: string;
@@ -242,7 +243,7 @@ const App: React.FC = () => {
         </h1>
 
         <div className="nav-tabs">
-          {(['ALL', 'AUDIO', 'LINK', 'CHAT'] as Section[]).map((section) => (
+          {(['ALL', 'AUDIO', 'LINK', 'FEED', 'CHAT'] as Section[]).map((section) => (
             <button
               key={section}
               className={`nav-tab ${activeSection === section ? 'active' : ''}`}
@@ -322,7 +323,7 @@ const App: React.FC = () => {
       {/* Main Content */}
       <div className="main-content">
         {/* Sidebar with Tags */}
-        {activeSection !== 'CHAT' && allTags.length > 0 && (
+        {activeSection !== 'CHAT' && activeSection !== 'FEED' && allTags.length > 0 && (
           <div className="sidebar">
             <div className="sidebar-header">Tags</div>
             <div className="tag-list">
@@ -394,8 +395,13 @@ const App: React.FC = () => {
               </button>
             </div>
           </div>
+        ) : activeSection === 'FEED' ? (
+          /* Feed Management Section */
+          <div style={{ flex: 1, overflowY: 'auto' }}>
+            <FeedView onMediaAdded={loadData} />
+          </div>
         ) : (
-          /* Feed Section */
+          /* Media Feed Section */
           <div className="feed-container">
             {/* Processing Jobs */}
             {processingJobs.length > 0 && (

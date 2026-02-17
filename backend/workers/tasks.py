@@ -3,10 +3,11 @@ Celery tasks for media processing pipeline
 """
 import os
 from typing import Optional
+from datetime import datetime
 from celery import chain
 from backend.workers.celery_app import app
 from backend.db.database import get_db_context
-from backend.db.models import MediaItem, ProcessingJob
+from backend.db.models import MediaItem, ProcessingJob, Subscription
 from backend.services.media_extractor import MediaExtractor
 from backend.services.web_extractor import WebExtractor
 from backend.services.audio_dedup import AudioDeduplicator
@@ -14,6 +15,7 @@ from backend.services.whisper_service import WhisperService
 from backend.services.gemini_service import GeminiService
 from backend.services.embeddings import generate_embedding
 from backend.storage.minio_client import MinIOClient
+from uuid import uuid4
 
 
 @app.task(bind=True, name='backend.workers.tasks.process_media_task')
@@ -344,3 +346,79 @@ def finalize_processing(self, enrich_result: Optional[dict], job_id: str):
             db.commit()
         
         return {'status': 'completed', 'media_id': media.id}
+
+
+@app.task(bind=True, name='backend.workers.tasks.process_subscription_task')
+def process_subscription_task(self, subscription_id: str):
+    """
+    Process/sync a subscription - fetch new content and create media items
+    """
+    with get_db_context() as db:
+        subscription = db.query(Subscription).filter(
+            Subscription.id == subscription_id
+        ).first()
+        
+        if not subscription:
+            raise Exception(f"Subscription {subscription_id} not found")
+        
+        if not subscription.sync_enabled:
+            return {'status': 'skipped', 'reason': 'sync disabled'}
+        
+        try:
+            # Extract content from subscription URL
+            extractor = WebExtractor()
+            result = extractor.extract(subscription.url)
+            
+            # Create media item for this subscription
+            media_id = str(uuid4())
+            media_item = MediaItem(
+                id=media_id,
+                title=result.get('title') or subscription.title,
+                type='web',
+                source_type='rss_url' if 'rss' in subscription.type.lower() else 'web_url',
+                source_url=subscription.url,
+                raw_text=result.get('text'),
+                status='pending',
+                origin='subscription',
+                subscription_id=subscription_id
+            )
+            db.add(media_item)
+            
+            # Create processing job to enrich this media
+            job_id = str(uuid4())
+            job = ProcessingJob(
+                id=job_id,
+                media_id=media_id,
+                status='pending'
+            )
+            db.add(job)
+            db.commit()
+            
+            # Update subscription last_checked
+            subscription.last_checked = datetime.utcnow()
+            db.commit()
+            
+            # Chain enrichment tasks
+            pipeline = chain(
+                enrich_with_gemini.s(
+                    {'raw_text': result.get('text'), 'transcript': None},
+                    job_id
+                ),
+                finalize_processing.s(job_id)
+            )
+            
+            task = pipeline()
+            
+            return {
+                'status': 'processed',
+                'subscription_id': subscription_id,
+                'media_id': media_id,
+                'job_id': job_id,
+                'celery_task_id': task.id
+            }
+        
+        except Exception as e:
+            subscription.last_checked = datetime.utcnow()
+            db.commit()
+            raise Exception(f"Failed to sync subscription: {str(e)}")
+

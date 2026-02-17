@@ -32,6 +32,8 @@ export interface MediaItem {
   status: string;
   created_at: string;
   imported_at?: string;
+  origin?: string;
+  subscription_id?: string;
 }
 
 export interface JobStatus {
@@ -243,3 +245,103 @@ export async function pollJobStatus(
     poll(); // Start immediately
   });
 }
+
+/**
+ * Get all subscriptions
+ */
+export async function getSubscriptions(): Promise<any[]> {
+  const response = await fetch(`${API_BASE_URL}/subscriptions`);
+  
+  if (!response.ok) {
+    throw new Error(`Failed to fetch subscriptions: ${response.statusText}`);
+  }
+  
+  return response.json();
+}
+
+/**
+ * Create new subscription
+ */
+export async function createSubscription(subscription: {
+  url: string;
+  title: string;
+  type?: string;
+  description?: string;
+}): Promise<any> {
+  const response = await fetch(`${API_BASE_URL}/subscriptions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(subscription)
+  });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || `Failed to create subscription: ${response.statusText}`);
+  }
+  
+  return response.json();
+}
+
+/**
+ * Get subscription by ID
+ */
+export async function getSubscription(id: string): Promise<any> {
+  const response = await fetch(`${API_BASE_URL}/subscriptions/${id}`);
+  
+  if (!response.ok) {
+    throw new Error(`Failed to fetch subscription: ${response.statusText}`);
+  }
+  
+  return response.json();
+}
+
+/**
+ * Update subscription
+ */
+export async function updateSubscription(id: string, update: {
+  title?: string;
+  description?: string;
+  sync_enabled?: boolean;
+}): Promise<any> {
+  const response = await fetch(`${API_BASE_URL}/subscriptions/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(update)
+  });
+  
+  if (!response.ok) {
+    throw new Error(`Failed to update subscription: ${response.statusText}`);
+  }
+  
+  return response.json();
+}
+
+/**
+ * Delete subscription
+ */
+export async function deleteSubscription(id: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/subscriptions/${id}`, {
+    method: 'DELETE'
+  });
+  
+  if (!response.ok) {
+    throw new Error(`Failed to delete subscription: ${response.statusText}`);
+  }
+}
+
+/**
+ * Manually sync subscription
+ */
+export async function syncSubscription(id: string): Promise<any> {
+  const response = await fetch(`${API_BASE_URL}/subscriptions/${id}/sync`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' }
+  });
+  
+  if (!response.ok) {
+    throw new Error(`Failed to sync subscription: ${response.statusText}`);
+  }
+  
+  return response.json();
+}
+
