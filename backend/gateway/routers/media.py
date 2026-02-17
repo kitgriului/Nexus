@@ -105,22 +105,38 @@ async def process_upload(
     """
     Process uploaded audio file
     """
-    # Save file temporarily
-    from backend.config.settings import settings
-    import os
+    from backend.storage.minio_client import MinIOClient
     
-    temp_path = os.path.join(settings.TEMP_DIR, f"{uuid4()}_{file.filename}")
-    with open(temp_path, "wb") as f:
-        content = await file.read()
-        f.write(content)
-    
-    # Create media item
+    # Generate media ID
     media_id = str(uuid4())
+    
+    # Save file content to memory first
+    content = await file.read()
+    
+    # Upload to MinIO immediately
+    import tempfile
+    import os
+    with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename)[1]) as tmp:
+        tmp.write(content)
+        tmp_path = tmp.name
+    
+    try:
+        minio_client = MinIOClient()
+        minio_path = minio_client.upload_audio(
+            file_path=tmp_path,
+            media_id=media_id
+        )
+    finally:
+        # Clean up temp file
+        os.remove(tmp_path)
+    
+    # Create media item with MinIO path
     media_item = MediaItem(
         id=media_id,
         title=title or file.filename,
         type="audio",
         source_type="uploaded_audio",
+        minio_path=minio_path,
         status="pending"
     )
     db.add(media_item)
@@ -135,8 +151,8 @@ async def process_upload(
     db.add(job)
     db.commit()
     
-    # Enqueue task with file path
-    task = process_media_task.delay(job_id, file_path=temp_path)
+    # Enqueue task (no file_path needed - will use MinIO)
+    task = process_media_task.delay(job_id)
     job.celery_task_id = task.id
     db.commit()
     

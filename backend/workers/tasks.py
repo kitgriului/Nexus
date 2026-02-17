@@ -17,15 +17,19 @@ from backend.storage.minio_client import MinIOClient
 
 
 @app.task(bind=True, name='backend.workers.tasks.process_media_task')
-def process_media_task(self, job_id: str, file_path: Optional[str] = None):
+def process_media_task(self, job_id: str):
     """
     Main orchestrator task - chains all processing steps
     """
     with get_db_context() as db:
         job = db.query(ProcessingJob).filter(ProcessingJob.id == job_id).first()
         media = db.query(MediaItem).filter(MediaItem.id == job.media_id).first()
+        
+        # Get source_type before session closes
+        source_type = media.source_type
 
-    if media.source_type in ['web_url', 'rss_url']:
+    # Now safe to use source_type after context closes
+    if source_type in ['web_url', 'rss_url']:
         pipeline = chain(
             extract_web_content.s(job_id),
             enrich_with_gemini.s(job_id),
@@ -33,7 +37,7 @@ def process_media_task(self, job_id: str, file_path: Optional[str] = None):
         )
     else:
         pipeline = chain(
-            extract_media.s(job_id, file_path),
+            extract_media.s(job_id),
             check_duplicate.s(job_id),
             transcribe_audio.s(job_id),
             enrich_with_gemini.s(job_id),
@@ -78,11 +82,11 @@ def extract_web_content(self, job_id: str):
 
 
 @app.task(bind=True, name='backend.workers.tasks.extract_media')
-def extract_media(self, job_id: str, file_path: Optional[str] = None):
+def extract_media(self, job_id: str):
     """
     Step 1: Extract/Download media and upload to MinIO
     
-    Returns: dict with audio_path (MinIO), duration, title
+    Returns: dict with minio_path, duration, title
     """
     with get_db_context() as db:
         job = db.query(ProcessingJob).filter(ProcessingJob.id == job_id).first()
@@ -98,11 +102,23 @@ def extract_media(self, job_id: str, file_path: Optional[str] = None):
             extractor = MediaExtractor()
             minio_client = MinIOClient()
             
-            if file_path:
-                # File already uploaded - just process it
-                audio_path = file_path
-                title = media.title
-                duration = extractor.get_audio_duration(audio_path)
+            # Check if file already uploaded (has minio_path)
+            if media.minio_path:
+                # File already in MinIO (uploaded file)
+                # Just get duration
+                local_path = minio_client.download_audio(media.minio_path)
+                duration = extractor.get_audio_duration(local_path)
+                os.remove(local_path)
+                
+                media.duration = duration
+                job.progress_percent = 20
+                db.commit()
+                
+                return {
+                    'minio_path': media.minio_path,
+                    'duration': duration,
+                    'title': media.title
+                }
             else:
                 # Download from URL (yt-dlp)
                 result = extractor.download_url(media.source_url)
@@ -110,28 +126,27 @@ def extract_media(self, job_id: str, file_path: Optional[str] = None):
                 title = result['title']
                 duration = result['duration']
                 media.title = title
-            
-            # Upload to MinIO
-            minio_path = minio_client.upload_audio(
-                file_path=audio_path,
-                media_id=media.id
-            )
-            
-            # Update media item
-            media.minio_path = minio_path
-            media.duration = duration
-            job.progress_percent = 20
-            db.commit()
-            
-            # Clean up local file if it was a download
-            if not file_path:
+                
+                # Upload to MinIO
+                minio_path = minio_client.upload_audio(
+                    file_path=audio_path,
+                    media_id=media.id
+                )
+                
+                # Update media item
+                media.minio_path = minio_path
+                media.duration = duration
+                job.progress_percent = 20
+                db.commit()
+                
+                # Clean up local file
                 os.remove(audio_path)
-            
-            return {
-                'minio_path': minio_path,
-                'duration': duration,
-                'title': title
-            }
+                
+                return {
+                    'minio_path': minio_path,
+                    'duration': duration,
+                    'title': title
+                }
             
         except Exception as e:
             job.status = 'error'

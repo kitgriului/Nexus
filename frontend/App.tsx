@@ -7,6 +7,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import './styles.css';
 import { Icon } from './components/Icons';
 import { FeedItem } from './components/FeedItem';
+import { DetailView } from './components/DetailView';
 import { JobStatus } from './components/JobStatus';
 import * as api from './apiClient/client';
 import wsService from './services/websocket';
@@ -30,6 +31,7 @@ const App: React.FC = () => {
   const [processingJobs, setProcessingJobs] = useState<ProcessingJob[]>([]);
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [selectedMediaId, setSelectedMediaId] = useState<string | null>(null);
 
   const mediaRecorder = useRef<MediaRecorder | null>(null);
   const audioChunks = useRef<Blob[]>([]);
@@ -419,7 +421,7 @@ const App: React.FC = () => {
                 <FeedItem
                   key={item.id}
                   item={item}
-                  onClick={() => {}}
+                  onClick={(id) => setSelectedMediaId(id)}
                   onTagClick={(tag) => setSelectedTag(tag)}
                   onDelete={handleDeleteMedia}
                 />
@@ -446,6 +448,14 @@ const App: React.FC = () => {
             }}
           />
         </div>
+      )}
+
+      {/* Detail View Modal */}
+      {selectedMediaId && (
+        <DetailView
+          item={media.find((item) => item.id === selectedMediaId)!}
+          onClose={() => setSelectedMediaId(null)}
+        />
       )}
     </div>
   );
