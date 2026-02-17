@@ -80,13 +80,4 @@ export const JobStatus: React.FC<JobStatusProps> = ({ jobId, status, progress })
   );
 };
 
-      {status.status === 'failed' && status.error && (
-        <div className="error-message">
-          {status.error}
-        </div>
-      )}
-    </div>
-  );
-};
-
 export default JobStatus;
