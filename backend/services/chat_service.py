@@ -32,12 +32,12 @@ async def answer_with_context(
             title,
             ai_summary,
             raw_text,
-            1 - (embedding <=> :embedding::vector) AS similarity
+            1 - (embedding <=> CAST(:embedding AS vector)) AS similarity
         FROM media_items
         WHERE 
             embedding IS NOT NULL
             AND status = 'completed'
-        ORDER BY embedding <=> :embedding::vector
+        ORDER BY embedding <=> CAST(:embedding AS vector)
         LIMIT :limit
     """)
     

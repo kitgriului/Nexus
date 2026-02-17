@@ -1,6 +1,7 @@
 """
 Media processing endpoints
 """
+from datetime import datetime
 from typing import List, Optional
 from uuid import uuid4
 
@@ -32,7 +33,7 @@ class MediaResponse(BaseModel):
     ai_summary: Optional[str]
     tags: List[str]
     status: str
-    created_at: str
+    created_at: datetime
     
     class Config:
         from_attributes = True

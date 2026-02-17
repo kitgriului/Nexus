@@ -52,13 +52,13 @@ async def semantic_search(
             title, 
             ai_summary, 
             tags,
-            1 - (embedding <=> :embedding::vector) AS similarity
+            1 - (embedding <=> CAST(:embedding AS vector)) AS similarity
         FROM media_items
         WHERE 
             embedding IS NOT NULL
             AND status = 'completed'
-            AND (1 - (embedding <=> :embedding::vector)) >= :min_similarity
-        ORDER BY embedding <=> :embedding::vector
+            AND (1 - (embedding <=> CAST(:embedding AS vector))) >= :min_similarity
+        ORDER BY embedding <=> CAST(:embedding AS vector)
         LIMIT :limit
     """)
     

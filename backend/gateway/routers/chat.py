@@ -2,13 +2,14 @@
 Chat with archive endpoints
 """
 from typing import List
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
 from backend.db.database import get_db
 from backend.db.models import ChatMessage, MediaItem
 from backend.services.chat_service import answer_with_context
+from backend.config.settings import settings
 
 router = APIRouter()
 
@@ -31,6 +32,11 @@ async def chat(
     """
     Chat with Nexus AI using archive context
     """
+    if not settings.GEMINI_API_KEY:
+        raise HTTPException(
+            status_code=503,
+            detail="GEMINI_API_KEY is not set. Chat is unavailable."
+        )
     # Save user message
     user_msg = ChatMessage(
         role="user",
@@ -40,11 +46,17 @@ async def chat(
     db.commit()
     
     # Get response with context
-    response_text, context_ids = await answer_with_context(
-        query=request.message,
-        db=db,
-        max_context_items=request.max_context_items
-    )
+    try:
+        response_text, context_ids = await answer_with_context(
+            query=request.message,
+            db=db,
+            max_context_items=request.max_context_items
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=502,
+            detail="Gemini request failed. Check GEMINI_API_KEY and try again."
+        )
     
     # Save assistant message
     assistant_msg = ChatMessage(

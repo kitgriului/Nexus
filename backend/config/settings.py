@@ -40,6 +40,8 @@ class Settings(BaseSettings):
     
     # Google Gemini
     GEMINI_API_KEY: Optional[str] = None
+    GEMINI_MODEL: str = "gemini-2.0-flash"
+    VECTOR_DIMENSION: int = 768
     
     # Whisper Configuration
     WHISPER_MODE: str = "api"  # "api" or "local"
