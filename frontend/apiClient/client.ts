@@ -21,16 +21,17 @@ export interface ProcessUploadResponse {
 export interface MediaItem {
   id: string;
   title: string;
-  media_type: string;
+  type: string;
   source_type: string;
   source_url?: string;
   duration?: number;
+  raw_text?: string;
   transcript?: string;
-  summary?: string;
+  ai_summary?: string;
   tags?: string[];
   status: string;
   created_at: string;
-  updated_at: string;
+  imported_at?: string;
 }
 
 export interface JobStatus {

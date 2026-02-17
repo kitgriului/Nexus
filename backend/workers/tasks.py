@@ -8,6 +8,7 @@ from backend.workers.celery_app import app
 from backend.db.database import get_db_context
 from backend.db.models import MediaItem, ProcessingJob
 from backend.services.media_extractor import MediaExtractor
+from backend.services.web_extractor import WebExtractor
 from backend.services.audio_dedup import AudioDeduplicator
 from backend.services.whisper_service import WhisperService
 from backend.services.gemini_service import GeminiService
@@ -20,16 +21,60 @@ def process_media_task(self, job_id: str, file_path: Optional[str] = None):
     """
     Main orchestrator task - chains all processing steps
     """
-    # Build processing chain
-    pipeline = chain(
-        extract_media.s(job_id, file_path),
-        check_duplicate.s(job_id),
-        transcribe_audio.s(job_id),
-        enrich_with_gemini.s(job_id),
-        finalize_processing.s(job_id)
-    )
-    
+    with get_db_context() as db:
+        job = db.query(ProcessingJob).filter(ProcessingJob.id == job_id).first()
+        media = db.query(MediaItem).filter(MediaItem.id == job.media_id).first()
+
+    if media.source_type in ['web_url', 'rss_url']:
+        pipeline = chain(
+            extract_web_content.s(job_id),
+            enrich_with_gemini.s(job_id),
+            finalize_processing.s(job_id)
+        )
+    else:
+        pipeline = chain(
+            extract_media.s(job_id, file_path),
+            check_duplicate.s(job_id),
+            transcribe_audio.s(job_id),
+            enrich_with_gemini.s(job_id),
+            finalize_processing.s(job_id)
+        )
+
     return pipeline()
+
+
+@app.task(bind=True, name='backend.workers.tasks.extract_web_content')
+def extract_web_content(self, job_id: str):
+    """
+    Extract text from web page or feed
+    """
+    with get_db_context() as db:
+        job = db.query(ProcessingJob).filter(ProcessingJob.id == job_id).first()
+        media = db.query(MediaItem).filter(MediaItem.id == job.media_id).first()
+
+        job.status = 'extracting'
+        job.current_stage = 'Web Extraction'
+        job.progress_percent = 10
+        db.commit()
+
+        try:
+            extractor = WebExtractor()
+            result = extractor.extract(media.source_url)
+
+            media.title = result.get('title') or media.title
+            media.raw_text = result.get('text')
+            job.progress_percent = 40
+            db.commit()
+
+            return {
+                'raw_text': media.raw_text,
+            }
+        except Exception as e:
+            job.status = 'error'
+            job.error_message = f"Web extraction failed: {str(e)}"
+            media.status = 'error'
+            db.commit()
+            raise
 
 
 @app.task(bind=True, name='backend.workers.tasks.extract_media')
@@ -276,7 +321,8 @@ def finalize_processing(self, enrich_result: Optional[dict], job_id: str):
         media = db.query(MediaItem).filter(MediaItem.id == job.media_id).first()
         
         if job.status != 'error':
-            media.status = 'completed'
+            if media.status != 'duplicate':
+                media.status = 'completed'
             job.status = 'completed'
             job.current_stage = 'Completed'
             job.progress_percent = 100

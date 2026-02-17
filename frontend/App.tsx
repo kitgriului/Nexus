@@ -15,6 +15,7 @@ type Section = 'ALL' | 'AUDIO' | 'LINK' | 'CHAT';
 
 interface ProcessingJob {
   id: string;
+  mediaId: string;
   status: 'pending' | 'processing' | 'completed' | 'error';
   progress?: number;
 }
@@ -32,6 +33,51 @@ const App: React.FC = () => {
 
   const mediaRecorder = useRef<MediaRecorder | null>(null);
   const audioChunks = useRef<Blob[]>([]);
+
+  const normalizeJobStatus = (status: string): ProcessingJob['status'] => {
+    if (status === 'completed') return 'completed';
+    if (status === 'error' || status === 'failed') return 'error';
+    if (status === 'pending') return 'pending';
+    return 'processing';
+  };
+
+  const trackJob = (jobId: string, mediaId: string) => {
+    setProcessingJobs((prev) => [
+      ...prev,
+      { id: jobId, mediaId, status: 'pending' },
+    ]);
+
+    api
+      .pollJobStatus(mediaId, (jobStatus) => {
+        const normalized = normalizeJobStatus(jobStatus.status);
+        setProcessingJobs((prev) =>
+          prev.map((job) =>
+            job.id === jobId
+              ? {
+                  ...job,
+                  status: normalized,
+                  progress: jobStatus.progress_percent,
+                }
+              : job
+          )
+        );
+
+        if (normalized === 'completed' || normalized === 'error') {
+          setTimeout(() => {
+            setProcessingJobs((prev) => prev.filter((j) => j.id !== jobId));
+          }, 3000);
+        }
+      })
+      .then(() => loadData())
+      .catch((err) => {
+        setProcessingJobs((prev) =>
+          prev.map((job) =>
+            job.id === jobId ? { ...job, status: 'error' } : job
+          )
+        );
+        setError(`Processing failed: ${err}`);
+      });
+  };
 
   // Load initial data
   const loadData = async () => {
@@ -100,15 +146,7 @@ const App: React.FC = () => {
     try {
       const file = new File([blob], 'recording.webm', { type: blob.type });
       const response = await api.processUpload(file, 'Audio Recording');
-
-      const job: ProcessingJob = {
-        id: response.job_id,
-        status: 'pending',
-      };
-      setProcessingJobs((prev) => [...prev, job]);
-
-      // Reload media after processing
-      setTimeout(() => loadData(), 5000);
+      trackJob(response.job_id, response.media_id);
     } catch (err) {
       setError('Failed to upload recording');
       console.error(err);
@@ -122,14 +160,7 @@ const App: React.FC = () => {
 
     try {
       const response = await api.processUpload(file, file.name);
-
-      const job: ProcessingJob = {
-        id: response.job_id,
-        status: 'pending',
-      };
-      setProcessingJobs((prev) => [...prev, job]);
-
-      setTimeout(() => loadData(), 5000);
+      trackJob(response.job_id, response.media_id);
     } catch (err) {
       setError(`Upload failed: ${err}`);
       console.error(err);
@@ -142,16 +173,20 @@ const App: React.FC = () => {
   const processUrl = async (url: string) => {
     try {
       const response = await api.processUrl(url, url);
-
-      const job: ProcessingJob = {
-        id: response.job_id,
-        status: 'pending',
-      };
-      setProcessingJobs((prev) => [...prev, job]);
-
-      setTimeout(() => loadData(), 5000);
+      trackJob(response.job_id, response.media_id);
     } catch (err) {
       setError(`Failed to process URL: ${err}`);
+      console.error(err);
+    }
+  };
+
+  const handleDeleteMedia = async (mediaId: string) => {
+    try {
+      await api.deleteMedia(mediaId);
+      setMedia((prev) => prev.filter((item) => item.id !== mediaId));
+      setProcessingJobs((prev) => prev.filter((job) => job.mediaId !== mediaId));
+    } catch (err) {
+      setError(`Failed to delete item: ${err}`);
       console.error(err);
     }
   };
@@ -190,7 +225,7 @@ const App: React.FC = () => {
   const filteredMedia = media.filter((item) => {
     if (selectedTag && !item.tags?.includes(selectedTag)) return false;
     if (activeSection === 'AUDIO' && item.type !== 'audio') return false;
-    if (activeSection === 'LINK' && item.type !== 'youtube') return false;
+    if (activeSection === 'LINK' && item.type === 'audio') return false;
     return true;
   });
 
@@ -386,6 +421,7 @@ const App: React.FC = () => {
                   item={item}
                   onClick={() => {}}
                   onTagClick={(tag) => setSelectedTag(tag)}
+                  onDelete={handleDeleteMedia}
                 />
               ))
             )}

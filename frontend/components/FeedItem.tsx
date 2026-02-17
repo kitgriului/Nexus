@@ -1,13 +1,14 @@
 import React from 'react';
-import { MediaItem } from '../types';
+import { MediaItem } from '../apiClient/client';
 
 interface FeedItemProps {
   item: MediaItem;
   onClick: (id: string) => void;
   onTagClick: (tag: string) => void;
+  onDelete: (id: string) => void;
 }
 
-export const FeedItem: React.FC<FeedItemProps> = ({ item, onClick, onTagClick }) => {
+export const FeedItem: React.FC<FeedItemProps> = ({ item, onClick, onTagClick, onDelete }) => {
   const getEmoji = () => {
     if (item.type === 'youtube' || item.type === 'video') return '▶️';
     if (item.type === 'audio') return '🎙️';
@@ -18,7 +19,7 @@ export const FeedItem: React.FC<FeedItemProps> = ({ item, onClick, onTagClick })
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (confirm('Delete this item?')) {
-      // TODO: implement delete
+      onDelete(item.id);
     }
   };
 

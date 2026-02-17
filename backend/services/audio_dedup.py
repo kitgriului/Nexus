@@ -1,6 +1,7 @@
 """
 Audio deduplication using chromaprint fingerprinting
 """
+import base64
 import acoustid
 from backend.config.settings import settings
 
@@ -18,10 +19,15 @@ class AudioDeduplicator:
         try:
             # Generate fingerprint using acoustid
             duration, fingerprint = acoustid.fingerprint_file(audio_path)
-            
-            # Use fingerprint as hash (it's already a unique representation)
-            # Truncate to reasonable length for storage
-            return fingerprint[:64]
+
+            # Normalize fingerprint to a stable ASCII string for DB storage
+            if isinstance(fingerprint, bytes):
+                encoded = base64.urlsafe_b64encode(fingerprint).decode('ascii')
+            else:
+                encoded = str(fingerprint)
+
+            # Truncate to fit the database column size
+            return encoded[:64]
             
         except Exception as e:
             raise Exception(f"Failed to generate audio fingerprint: {str(e)}")

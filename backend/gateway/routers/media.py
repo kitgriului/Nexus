@@ -2,7 +2,8 @@
 Media processing endpoints
 """
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Tuple
+from urllib.parse import urlparse
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
@@ -20,6 +21,18 @@ router = APIRouter()
 class ProcessUrlRequest(BaseModel):
     url: HttpUrl
     title: Optional[str] = None
+def classify_url(url: str) -> Tuple[str, str]:
+    host = urlparse(url).netloc.lower()
+    path = urlparse(url).path.lower()
+
+    if 'youtube.com' in host or 'youtu.be' in host:
+        return 'youtube', 'youtube_url'
+    if 'instagram.com' in host:
+        return 'instagram', 'instagram_url'
+    if path.endswith('.xml') or 'rss' in path or 'feed' in path:
+        return 'web', 'rss_url'
+    return 'web', 'web_url'
+
 
 
 class MediaResponse(BaseModel):
@@ -49,11 +62,12 @@ async def process_url(
     """
     # Create media item
     media_id = str(uuid4())
+    media_type, source_type = classify_url(str(request.url))
     media_item = MediaItem(
         id=media_id,
         title=request.title or "Processing URL...",
-        type="youtube",
-        source_type="youtube_url",
+        type=media_type,
+        source_type=source_type,
         source_url=str(request.url),
         status="pending"
     )

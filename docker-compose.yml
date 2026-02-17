@@ -87,7 +87,7 @@ services:
       context: .
       dockerfile: backend/workers/Dockerfile
     container_name: nexus-worker
-    command: celery -A backend.workers.celery_app worker --loglevel=info --concurrency=2
+    command: celery -A backend.workers.celery_app worker --loglevel=info --concurrency=2 --queues=celery,extraction,transcription,enrichment
     environment:
       DATABASE_URL: postgresql://nexus:nexus@postgres:5432/nexus
       REDIS_URL: redis://redis:6379/0
