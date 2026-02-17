@@ -1,6 +1,8 @@
-# Nexus v2.0 - AI Media Archive
+# Nexus v2.1 - AI Media Archive
 
 Production-ready media processing and archival system with semantic search and RAG-based chat.
+
+**Latest Release**: v2.1.0 - Fixed Gemini API model compatibility for stable chat functionality
 
 ## Features
 

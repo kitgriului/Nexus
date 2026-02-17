@@ -2,6 +2,34 @@
 
 All notable changes to Nexus will be documented in this file.
 
+## [2.1.0] - 2026-02-17
+
+### 🐛 Critical Bug Fixes
+
+#### Chat Endpoint 502 Error Resolution
+- **Issue**: Chat endpoint (`POST /api/chat`) returning 502 Bad Gateway despite valid API key
+- **Root Cause**: Configuration used model `gemini-2.0-flash-exp` which doesn't exist in Gemini API
+- **Solution**: Updated to valid model `gemini-2.0-flash` in `backend/config/settings.py`
+- **Impact**: Chat functionality now fully operational across all environments
+
+#### Testing & Verification
+- ✅ All API endpoints operational (health, media, search, chat)
+- ✅ Database vector search working correctly
+- ✅ Gemini API integration stable with valid model
+- ✅ Complete end-to-end functionality validated
+
+### 📝 Documentation Updates
+- Added comprehensive resolution summary with diagnostics
+- Updated DONE.md with v2.1 release notes
+- Documented Gemini model discovery and fix process
+
+### 🔧 Technical Details
+- Validated 35+ available Gemini models via API
+- Confirmed model `gemini-2.0-flash` is stable and supported
+- No performance impact from model switch (same tier)
+
+---
+
 ## [2.0.0] - 2026-02-17
 
 ### 🔧 Bug Fixes & Production Readiness
