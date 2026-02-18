@@ -1,7 +1,7 @@
 """
 Gemini service for AI enrichment (summary, tags)
 """
-from typing import Dict, List
+from typing import Dict, List, Optional
 import json
 from google import genai
 from google.genai import types
@@ -85,3 +85,72 @@ Answer the question using the provided context. If the context doesn't contain e
         )
         
         return getattr(response, "text", None) or "I couldn't process that request."
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=2, min=2, max=10)
+    )
+    def extract_feed_items(
+        self,
+        source_title: str,
+        content: str,
+        prompt: Optional[str],
+        period_days: int
+    ) -> List[Dict[str, any]]:
+        """
+        Extract structured items from content using a prompt and time window.
+
+        Returns:
+            list of items: {
+                'title': str,
+                'url': str,
+                'date': str,
+                'summary': str,
+                'tags': list[str]
+            }
+        """
+        trimmed = content[:20000]
+        prompt_text = (prompt or '').strip() or 'Extract the most important updates.'
+        extraction_prompt = f"""SOURCE: {source_title}
+
+USER INTENT:
+{prompt_text}
+
+TIME WINDOW:
+Only include items from the last {period_days} days. If date is missing, include only if clearly recent.
+
+CONTENT:
+{trimmed}
+
+TASK:
+Extract distinct items (news, posts, releases, changes) that match the user intent.
+Return 3-10 items. Be precise and avoid boilerplate like menus or footer text.
+
+RETURN ONLY JSON with this structure:
+{{
+  "items": [
+    {{
+      "title": "...",
+      "url": "...",
+      "date": "YYYY-MM-DD",
+      "summary": "...",
+      "tags": ["tag1", "tag2"]
+    }}
+  ]
+}}
+"""
+
+        response = self.client.models.generate_content(
+            model=self.model,
+            contents=extraction_prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json"
+            )
+        )
+
+        response_text = getattr(response, "text", None) or "{}"
+        result = json.loads(response_text)
+        items = result.get('items', [])
+        if not isinstance(items, list):
+            return []
+        return items

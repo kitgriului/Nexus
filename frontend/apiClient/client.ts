@@ -267,6 +267,8 @@ export async function createSubscription(subscription: {
   title: string;
   type?: string;
   description?: string;
+  prompt?: string;
+  period_days?: number;
 }): Promise<any> {
   const response = await fetch(`${API_BASE_URL}/subscriptions`, {
     method: 'POST',
@@ -302,6 +304,8 @@ export async function updateSubscription(id: string, update: {
   title?: string;
   description?: string;
   sync_enabled?: boolean;
+  prompt?: string;
+  period_days?: number;
 }): Promise<any> {
   const response = await fetch(`${API_BASE_URL}/subscriptions/${id}`, {
     method: 'PATCH',

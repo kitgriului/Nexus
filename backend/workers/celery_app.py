@@ -26,6 +26,13 @@ app.conf.update(
     worker_max_tasks_per_child=50,  # Restart worker after 50 tasks (memory cleanup)
 )
 
+app.conf.beat_schedule = {
+    'sync-subscriptions-daily': {
+        'task': 'backend.workers.tasks.sync_subscriptions_task',
+        'schedule': 60 * 60 * 24,
+    }
+}
+
 # Task routes (optional: split tasks across different queues)
 app.conf.task_routes = {
     'backend.workers.tasks.extract_media': {'queue': 'extraction'},

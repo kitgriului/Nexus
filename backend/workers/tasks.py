@@ -3,7 +3,8 @@ Celery tasks for media processing pipeline
 """
 import os
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timedelta
+from email.utils import parsedate_to_datetime
 from celery import chain
 from backend.workers.celery_app import app
 from backend.db.database import get_db_context
@@ -348,6 +349,18 @@ def finalize_processing(self, enrich_result: Optional[dict], job_id: str):
         return {'status': 'completed', 'media_id': media.id}
 
 
+def _parse_item_date(date_value: Optional[str]) -> Optional[datetime]:
+    if not date_value:
+        return None
+    try:
+        return datetime.fromisoformat(date_value.replace('Z', '+00:00'))
+    except Exception:
+        try:
+            return parsedate_to_datetime(date_value)
+        except Exception:
+            return None
+
+
 @app.task(bind=True, name='backend.workers.tasks.process_subscription_task')
 def process_subscription_task(self, subscription_id: str):
     """
@@ -365,60 +378,115 @@ def process_subscription_task(self, subscription_id: str):
             return {'status': 'skipped', 'reason': 'sync disabled'}
         
         try:
-            # Extract content from subscription URL
             extractor = WebExtractor()
             result = extractor.extract(subscription.url)
+            source_title = result.get('title') or subscription.title
+            entries = result.get('entries') or []
             
-            # Create media item for this subscription
-            media_id = str(uuid4())
-            media_item = MediaItem(
-                id=media_id,
-                title=result.get('title') or subscription.title,
-                type='web',
-                source_type='rss_url' if 'rss' in subscription.type.lower() else 'web_url',
-                source_url=subscription.url,
-                raw_text=result.get('text'),
-                status='pending',
-                origin='subscription',
-                subscription_id=subscription_id
+            if entries:
+                lines = []
+                for entry in entries[:50]:
+                    line = (
+                        f"Title: {entry.get('title', '')}\n"
+                        f"Date: {entry.get('date', '')}\n"
+                        f"URL: {entry.get('url', '')}\n"
+                        f"Summary: {entry.get('summary', '')}"
+                    )
+                    lines.append(line.strip())
+                content_text = "\n\n".join(lines)
+            else:
+                content_text = result.get('text') or ''
+
+            gemini = GeminiService()
+            period_days = subscription.period_days or 7
+            items = gemini.extract_feed_items(
+                source_title=source_title,
+                content=content_text,
+                prompt=subscription.prompt,
+                period_days=period_days
             )
-            db.add(media_item)
-            
-            # Create processing job to enrich this media
-            job_id = str(uuid4())
-            job = ProcessingJob(
-                id=job_id,
-                media_id=media_id,
-                status='pending'
-            )
-            db.add(job)
+
+            now = datetime.utcnow()
+            cutoff = now - timedelta(days=period_days)
+            created_ids = []
+            source_type = 'rss_url' if entries else 'web_url'
+
+            for item in items:
+                title = str(item.get('title', '')).strip()
+                url = str(item.get('url', '')).strip()
+                summary = str(item.get('summary', '')).strip()
+                tags = item.get('tags') or []
+                if not isinstance(tags, list):
+                    tags = []
+                item_date = _parse_item_date(item.get('date'))
+
+                if not title or not summary or not url:
+                    continue
+                if item_date and item_date < cutoff:
+                    continue
+
+                existing = db.query(MediaItem).filter(
+                    MediaItem.source_url == url,
+                    MediaItem.subscription_id == subscription_id
+                ).first()
+                if existing:
+                    continue
+
+                media_id = str(uuid4())
+                embedding = generate_embedding(summary) if summary else None
+                media_item = MediaItem(
+                    id=media_id,
+                    title=title,
+                    type='web',
+                    source_type=source_type,
+                    source_url=url,
+                    raw_text=summary,
+                    ai_summary=summary,
+                    tags=tags,
+                    embedding=embedding,
+                    status='completed',
+                    origin='subscription',
+                    subscription_id=subscription_id
+                )
+                db.add(media_item)
+                created_ids.append(media_id)
+
+            subscription.last_checked = now
             db.commit()
-            
-            # Update subscription last_checked
-            subscription.last_checked = datetime.utcnow()
-            db.commit()
-            
-            # Chain enrichment tasks
-            pipeline = chain(
-                enrich_with_gemini.s(
-                    {'raw_text': result.get('text'), 'transcript': None},
-                    job_id
-                ),
-                finalize_processing.s(job_id)
-            )
-            
-            task = pipeline()
-            
+
             return {
                 'status': 'processed',
                 'subscription_id': subscription_id,
-                'media_id': media_id,
-                'job_id': job_id,
-                'celery_task_id': task.id
+                'created_count': len(created_ids)
             }
         
         except Exception as e:
             subscription.last_checked = datetime.utcnow()
             db.commit()
             raise Exception(f"Failed to sync subscription: {str(e)}")
+
+
+@app.task(bind=True, name='backend.workers.tasks.sync_subscriptions_task')
+def sync_subscriptions_task(self):
+    """
+    Sync all enabled subscriptions at most once per day.
+    """
+    with get_db_context() as db:
+        now = datetime.utcnow()
+        cutoff = now - timedelta(days=1)
+        subscriptions = db.query(Subscription).filter(
+            Subscription.sync_enabled == True  # noqa: E712
+        ).all()
+
+        queued = 0
+        for subscription in subscriptions:
+            if subscription.last_checked and subscription.last_checked > cutoff:
+                continue
+            process_subscription_task.delay(subscription.id)
+            queued += 1
+
+        return {
+            'status': 'queued',
+            'queued': queued
+        }
 

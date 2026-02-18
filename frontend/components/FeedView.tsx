@@ -7,6 +7,8 @@ interface Subscription {
   title: string;
   type: string;
   description?: string;
+  prompt?: string;
+  period_days?: number;
   last_checked?: number;
   sync_enabled: boolean;
   created_at: number;
@@ -20,9 +22,15 @@ export const FeedView: React.FC<FeedViewProps> = ({ onMediaAdded }) => {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [newUrl, setNewUrl] = useState('');
   const [newTitle, setNewTitle] = useState('');
+  const [newPrompt, setNewPrompt] = useState('');
+  const [periodPreset, setPeriodPreset] = useState('7');
+  const [customDays, setCustomDays] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState<Set<string>>(new Set());
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editPrompt, setEditPrompt] = useState('');
+  const [editPeriod, setEditPeriod] = useState('7');
 
   // Load subscriptions on mount
   useEffect(() => {
@@ -55,6 +63,15 @@ export const FeedView: React.FC<FeedViewProps> = ({ onMediaAdded }) => {
       return;
     }
 
+    const periodDays = periodPreset === 'custom'
+      ? Number(customDays)
+      : Number(periodPreset);
+
+    if (!periodDays || periodDays < 1 || periodDays > 365) {
+      setError('Period must be between 1 and 365 days');
+      return;
+    }
+
     if (!validateUrl(newUrl)) {
       setError('Invalid URL');
       return;
@@ -67,12 +84,17 @@ export const FeedView: React.FC<FeedViewProps> = ({ onMediaAdded }) => {
       const subscription = await api.createSubscription({
         url: newUrl.trim(),
         title: newTitle.trim(),
-        type: 'site'
+        type: 'site',
+        prompt: newPrompt.trim() || undefined,
+        period_days: periodDays
       });
 
       setSubscriptions((prev) => [...prev, subscription]);
       setNewUrl('');
       setNewTitle('');
+      setNewPrompt('');
+      setPeriodPreset('7');
+      setCustomDays('');
     } catch (err: any) {
       const message = err.message || 'Failed to add subscription';
       setError(message);
@@ -138,6 +160,43 @@ export const FeedView: React.FC<FeedViewProps> = ({ onMediaAdded }) => {
     }
   };
 
+  const handleStartEdit = (subscription: Subscription) => {
+    setEditingId(subscription.id);
+    setEditPrompt(subscription.prompt || '');
+    setEditPeriod(String(subscription.period_days || 7));
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setEditPrompt('');
+    setEditPeriod('7');
+  };
+
+  const handleSaveEdit = async (id: string) => {
+    try {
+      setError(null);
+      const periodDays = Number(editPeriod);
+      
+      if (!periodDays || periodDays < 1 || periodDays > 365) {
+        setError('Period must be between 1 and 365 days');
+        return;
+      }
+
+      const updated = await api.updateSubscription(id, {
+        prompt: editPrompt.trim() || undefined,
+        period_days: periodDays
+      });
+      
+      setSubscriptions((prev) =>
+        prev.map((sub) => (sub.id === id ? updated : sub))
+      );
+      handleCancelEdit();
+    } catch (err) {
+      setError('Failed to update subscription');
+      console.error(err);
+    }
+  };
+
   return (
     <div className="feed-view">
       {/* Add Subscription Form */}
@@ -182,6 +241,67 @@ export const FeedView: React.FC<FeedViewProps> = ({ onMediaAdded }) => {
               fontFamily: 'inherit',
             }}
           />
+
+          <textarea
+            placeholder="What to extract? Example: 'новости про искусственный интеллект и GPT модели' or 'product launches and new features'"
+            value={newPrompt}
+            onChange={(e) => setNewPrompt(e.target.value)}
+            disabled={loading}
+            rows={2}
+            style={{
+              padding: '8px 12px',
+              border: '1px solid #ddd',
+              borderRadius: '4px',
+              fontSize: '13px',
+              fontFamily: 'inherit',
+              resize: 'vertical',
+            }}
+          />
+          <div style={{ fontSize: '11px', color: '#666', marginTop: '-4px' }}>
+            💡 AI will extract items matching your description. Leave empty to extract everything.
+          </div>
+
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <select
+              value={periodPreset}
+              onChange={(e) => setPeriodPreset(e.target.value)}
+              disabled={loading}
+              style={{
+                padding: '8px 12px',
+                border: '1px solid #ddd',
+                borderRadius: '4px',
+                fontSize: '13px',
+                fontFamily: 'inherit',
+              }}
+            >
+              <option value="1">Last 1 day</option>
+              <option value="3">Last 3 days</option>
+              <option value="7">Last 7 days</option>
+              <option value="30">Last 30 days</option>
+              <option value="90">Last 90 days</option>
+              <option value="custom">Custom</option>
+            </select>
+
+            {periodPreset === 'custom' && (
+              <input
+                type="number"
+                min="1"
+                max="365"
+                placeholder="Days"
+                value={customDays}
+                onChange={(e) => setCustomDays(e.target.value)}
+                disabled={loading}
+                style={{
+                  padding: '8px 12px',
+                  border: '1px solid #ddd',
+                  borderRadius: '4px',
+                  fontSize: '13px',
+                  fontFamily: 'inherit',
+                  width: '110px',
+                }}
+              />
+            )}
+          </div>
           
           <button
             onClick={handleAddSubscription}
@@ -253,97 +373,195 @@ export const FeedView: React.FC<FeedViewProps> = ({ onMediaAdded }) => {
                   borderRadius: '6px',
                   padding: '12px',
                   background: sub.sync_enabled ? '#fff' : '#f5f5f5',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
                   opacity: sub.sync_enabled ? 1 : 0.6,
                 }}
               >
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{
-                    fontWeight: '500',
-                    fontSize: '13px',
-                    marginBottom: '4px',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}>
-                    {sub.title}
-                  </div>
-                  <div style={{
-                    fontSize: '11px',
-                    color: '#666',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}>
-                    {sub.url}
-                  </div>
-                  {sub.last_checked && (
-                    <div style={{
-                      fontSize: '11px',
-                      color: '#999',
-                      marginTop: '2px',
-                    }}>
-                      Last checked: {new Date(sub.last_checked * 1000).toLocaleDateString()}
+                {editingId === sub.id ? (
+                  // Edit mode
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div style={{ fontWeight: '500', fontSize: '13px' }}>{sub.title}</div>
+                    <textarea
+                      placeholder="What to extract?"
+                      value={editPrompt}
+                      onChange={(e) => setEditPrompt(e.target.value)}
+                      rows={2}
+                      style={{
+                        padding: '6px 8px',
+                        border: '1px solid #ddd',
+                        borderRadius: '4px',
+                        fontSize: '12px',
+                        fontFamily: 'inherit',
+                        resize: 'vertical',
+                      }}
+                    />
+                    <input
+                      type="number"
+                      min="1"
+                      max="365"
+                      placeholder="Days"
+                      value={editPeriod}
+                      onChange={(e) => setEditPeriod(e.target.value)}
+                      style={{
+                        padding: '6px 8px',
+                        border: '1px solid #ddd',
+                        borderRadius: '4px',
+                        fontSize: '12px',
+                        fontFamily: 'inherit',
+                        width: '100px',
+                      }}
+                    />
+                    <div style={{ display: 'flex', gap: '4px' }}>
+                      <button
+                        onClick={() => handleSaveEdit(sub.id)}
+                        style={{
+                          padding: '4px 12px',
+                          fontSize: '11px',
+                          border: '1px solid #0066cc',
+                          background: '#0066cc',
+                          color: 'white',
+                          borderRadius: '3px',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Save
+                      </button>
+                      <button
+                        onClick={handleCancelEdit}
+                        style={{
+                          padding: '4px 12px',
+                          fontSize: '11px',
+                          border: '1px solid #ddd',
+                          background: 'white',
+                          borderRadius: '3px',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Cancel
+                      </button>
                     </div>
-                  )}
-                </div>
+                  </div>
+                ) : (
+                  // View mode
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{
+                        fontWeight: '500',
+                        fontSize: '13px',
+                        marginBottom: '4px',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}>
+                        {sub.title}
+                      </div>
+                      <div style={{
+                        fontSize: '11px',
+                        color: '#666',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}>
+                        {sub.url}
+                      </div>
+                      <div style={{
+                        fontSize: '11px',
+                        color: '#777',
+                        marginTop: '4px',
+                      }}>
+                        📅 Period: {sub.period_days || 7} days {sub.sync_enabled && '• 🔄 Auto-sync: daily'}
+                      </div>
+                      {sub.prompt && (
+                        <div style={{
+                          fontSize: '11px',
+                          color: '#555',
+                          marginTop: '2px',
+                          fontStyle: 'italic',
+                        }}>
+                          🎯 "{sub.prompt}"
+                        </div>
+                      )}
+                      {sub.last_checked && (
+                        <div style={{
+                          fontSize: '11px',
+                          color: '#999',
+                          marginTop: '2px',
+                        }}>
+                          Last synced: {new Date(sub.last_checked * 1000).toLocaleString()}
+                        </div>
+                      )}
+                    </div>
 
-                <div style={{
-                  display: 'flex',
-                  gap: '4px',
-                  marginLeft: '8px',
-                  flexShrink: 0,
-                }}>
-                  <button
-                    onClick={() => handleToggleSync(sub)}
-                    title={sub.sync_enabled ? 'Disable' : 'Enable'}
-                    style={{
-                      padding: '4px 8px',
-                      fontSize: '11px',
-                      border: `1px solid ${sub.sync_enabled ? '#0066cc' : '#ccc'}`,
-                      background: sub.sync_enabled ? '#0066cc' : 'white',
-                      color: sub.sync_enabled ? 'white' : '#333',
-                      borderRadius: '3px',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {sub.sync_enabled ? '✓' : '○'}
-                  </button>
+                    <div style={{
+                      display: 'flex',
+                      gap: '4px',
+                      marginLeft: '8px',
+                      flexShrink: 0,
+                    }}>
+                      <button
+                        onClick={() => handleStartEdit(sub)}
+                        title="Edit settings"
+                        style={{
+                          padding: '4px 8px',
+                          fontSize: '11px',
+                          border: '1px solid #ddd',
+                          background: 'white',
+                          borderRadius: '3px',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        ✏️
+                      </button>
 
-                  <button
-                    onClick={() => handleSyncSubscription(sub.id)}
-                    disabled={syncing.has(sub.id) || !sub.sync_enabled}
-                    title="Sync now"
-                    style={{
-                      padding: '4px 8px',
-                      fontSize: '11px',
-                      border: '1px solid #ddd',
-                      background: syncing.has(sub.id) ? '#f0f0f0' : 'white',
-                      cursor: syncing.has(sub.id) || !sub.sync_enabled ? 'not-allowed' : 'pointer',
-                      borderRadius: '3px',
-                    }}
-                  >
-                    {syncing.has(sub.id) ? '⟳' : '🔄'}
-                  </button>
+                      <button
+                        onClick={() => handleToggleSync(sub)}
+                        title={sub.sync_enabled ? 'Disable auto-sync' : 'Enable auto-sync'}
+                        style={{
+                          padding: '4px 8px',
+                          fontSize: '11px',
+                          border: `1px solid ${sub.sync_enabled ? '#0066cc' : '#ccc'}`,
+                          background: sub.sync_enabled ? '#0066cc' : 'white',
+                          color: sub.sync_enabled ? 'white' : '#333',
+                          borderRadius: '3px',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {sub.sync_enabled ? 'ON' : 'OFF'}
+                      </button>
 
-                  <button
-                    onClick={() => handleDeleteSubscription(sub.id)}
-                    title="Delete"
-                    style={{
-                      padding: '4px 8px',
-                      fontSize: '11px',
-                      border: '1px solid #fcc',
-                      background: 'white',
-                      color: '#c53030',
-                      borderRadius: '3px',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    ✕
-                  </button>
-                </div>
+                      <button
+                        onClick={() => handleSyncSubscription(sub.id)}
+                        disabled={syncing.has(sub.id)}
+                        title="Sync now"
+                        style={{
+                          padding: '4px 8px',
+                          fontSize: '11px',
+                          border: '1px solid #ddd',
+                          background: syncing.has(sub.id) ? '#f0f0f0' : 'white',
+                          cursor: syncing.has(sub.id) ? 'not-allowed' : 'pointer',
+                          borderRadius: '3px',
+                        }}
+                      >
+                        {syncing.has(sub.id) ? '⟳' : '🔄'}
+                      </button>
+
+                      <button
+                        onClick={() => handleDeleteSubscription(sub.id)}
+                        title="Delete"
+                        style={{
+                          padding: '4px 8px',
+                          fontSize: '11px',
+                          border: '1px solid #fcc',
+                          background: 'white',
+                          color: '#c53030',
+                          borderRadius: '3px',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>

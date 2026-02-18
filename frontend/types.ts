@@ -39,6 +39,8 @@ export interface Subscription {
   lastChecked: number;
   type: 'channel' | 'site';
   description?: string;
+  prompt?: string;
+  periodDays?: number;
 }
 
 export interface ChatMessage {

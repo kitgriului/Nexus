@@ -187,6 +187,8 @@ class Subscription(Base):
     type: Mapped[str] = mapped_column(String(50), nullable=False)  # channel, podcast, feed
     
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    prompt: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    period_days: Mapped[int] = mapped_column(Integer, default=7)
     
     # Sync tracking
     last_checked: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP, nullable=True)

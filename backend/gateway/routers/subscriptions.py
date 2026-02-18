@@ -7,7 +7,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel, HttpUrl, conint
 
 from backend.db.database import get_db
 from backend.db.models import Subscription, MediaItem
@@ -21,12 +21,16 @@ class SubscriptionCreate(BaseModel):
     title: str
     type: str = "site"  # channel, site, podcast
     description: Optional[str] = None
+    prompt: Optional[str] = None
+    period_days: conint(ge=1, le=365) = 7
 
 
 class SubscriptionUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     sync_enabled: Optional[bool] = None
+    prompt: Optional[str] = None
+    period_days: Optional[conint(ge=1, le=365)] = None
 
 
 class SubscriptionResponse(BaseModel):
@@ -35,6 +39,8 @@ class SubscriptionResponse(BaseModel):
     title: str
     type: str
     description: Optional[str]
+    prompt: Optional[str]
+    period_days: int
     last_checked: Optional[datetime]
     sync_enabled: bool
     created_at: datetime
@@ -70,6 +76,8 @@ async def create_subscription(
         title=subscription.title,
         type=subscription.type,
         description=subscription.description,
+        prompt=subscription.prompt,
+        period_days=subscription.period_days,
         sync_enabled=True
     )
     db.add(new_sub)
@@ -115,6 +123,10 @@ async def update_subscription(
         subscription.description = update.description
     if update.sync_enabled is not None:
         subscription.sync_enabled = update.sync_enabled
+    if update.prompt is not None:
+        subscription.prompt = update.prompt
+    if update.period_days is not None:
+        subscription.period_days = update.period_days
     
     db.commit()
     db.refresh(subscription)

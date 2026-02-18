@@ -27,10 +27,19 @@ class WebExtractor:
 
         title = feed.feed.get('title') or url
         parts: List[str] = []
+        structured_entries: List[Dict[str, any]] = []
         for entry in entries:
             entry_title = entry.get('title') or ''
             entry_summary = entry.get('summary') or entry.get('description') or ''
+            entry_link = entry.get('link') or ''
+            entry_date = entry.get('published') or entry.get('updated') or ''
             parts.append(f"{entry_title}\n{entry_summary}".strip())
+            structured_entries.append({
+                'title': entry_title,
+                'summary': entry_summary,
+                'url': entry_link,
+                'date': entry_date,
+            })
 
         text = "\n\n".join([p for p in parts if p])
         if not text:
@@ -39,6 +48,7 @@ class WebExtractor:
         return {
             'title': title,
             'text': text,
+            'entries': structured_entries,
         }
 
     def _extract_page(self, url: str) -> Dict[str, any]:
