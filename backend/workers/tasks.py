@@ -2,7 +2,8 @@
 Celery tasks for media processing pipeline
 """
 import os
-from typing import Optional
+from typing import Any, Dict, Optional
+import re
 from datetime import datetime, timedelta
 from email.utils import parsedate_to_datetime
 from celery import chain
@@ -361,6 +362,40 @@ def _parse_item_date(date_value: Optional[str]) -> Optional[datetime]:
             return None
 
 
+def _normalize_text(value: str) -> str:
+    return re.sub(r"\s+", " ", value or "").strip().lower()
+
+
+def _extract_limit_from_prompt(prompt: Optional[str]) -> Optional[int]:
+    if not prompt:
+        return None
+    lower = prompt.lower()
+    if not re.search(r"(last|latest|recent|последн)", lower):
+        return None
+    match = re.search(r"\b(\d{1,2})\b", lower)
+    if not match:
+        return None
+    limit = int(match.group(1))
+    if limit < 1:
+        return None
+    return min(limit, 20)
+
+
+def _build_entry_date_index(entries: list[Dict[str, Any]]) -> Dict[str, datetime]:
+    index: Dict[str, datetime] = {}
+    for entry in entries:
+        entry_date = _parse_item_date(entry.get('date'))
+        if not entry_date:
+            continue
+        url = _normalize_text(entry.get('url', ''))
+        title = _normalize_text(entry.get('title', ''))
+        if url:
+            index[url] = entry_date
+        if title and title not in index:
+            index[title] = entry_date
+    return index
+
+
 @app.task(bind=True, name='backend.workers.tasks.process_subscription_task')
 def process_subscription_task(self, subscription_id: str):
     """
@@ -410,7 +445,11 @@ def process_subscription_task(self, subscription_id: str):
             cutoff = now - timedelta(days=period_days)
             created_ids = []
             source_type = 'rss_url' if entries else 'web_url'
+            entry_date_index = _build_entry_date_index(entries) if entries else {}
+            limit = _extract_limit_from_prompt(subscription.prompt)
+            require_date = limit is not None
 
+            normalized_items = []
             for item in items:
                 title = str(item.get('title', '')).strip()
                 url = str(item.get('url', '')).strip()
@@ -418,9 +457,39 @@ def process_subscription_task(self, subscription_id: str):
                 tags = item.get('tags') or []
                 if not isinstance(tags, list):
                     tags = []
+
                 item_date = _parse_item_date(item.get('date'))
+                if not item_date and entry_date_index:
+                    lookup_url = _normalize_text(url)
+                    lookup_title = _normalize_text(title)
+                    item_date = entry_date_index.get(lookup_url) or entry_date_index.get(lookup_title)
+
+                normalized_items.append({
+                    'title': title,
+                    'url': url,
+                    'summary': summary,
+                    'tags': tags,
+                    'date': item_date,
+                })
+
+            normalized_items.sort(
+                key=lambda item: item['date'] or datetime.min,
+                reverse=True
+            )
+
+            if limit is not None:
+                normalized_items = normalized_items[:limit]
+
+            for item in normalized_items:
+                title = item['title']
+                url = item['url']
+                summary = item['summary']
+                tags = item['tags']
+                item_date = item['date']
 
                 if not title or not summary or not url:
+                    continue
+                if require_date and not item_date:
                     continue
                 if item_date and item_date < cutoff:
                     continue

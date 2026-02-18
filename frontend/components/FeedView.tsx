@@ -9,7 +9,7 @@ interface Subscription {
   description?: string;
   prompt?: string;
   period_days?: number;
-  last_checked?: number;
+  last_checked?: string | null;
   sync_enabled: boolean;
   created_at: number;
 }
@@ -31,6 +31,13 @@ export const FeedView: React.FC<FeedViewProps> = ({ onMediaAdded }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editPrompt, setEditPrompt] = useState('');
   const [editPeriod, setEditPeriod] = useState('7');
+
+  const formatDateTime = (value?: string | number | null) => {
+    if (!value) return '—';
+    const date = typeof value === 'number' ? new Date(value * 1000) : new Date(value);
+    if (Number.isNaN(date.getTime())) return '—';
+    return date.toLocaleString();
+  };
 
   // Load subscriptions on mount
   useEffect(() => {
@@ -90,6 +97,20 @@ export const FeedView: React.FC<FeedViewProps> = ({ onMediaAdded }) => {
       });
 
       setSubscriptions((prev) => [...prev, subscription]);
+      setSyncing((prev) => new Set([...prev, subscription.id]));
+      try {
+        await api.syncSubscription(subscription.id);
+        await loadSubscriptions();
+      } catch (syncErr) {
+        setError('Failed to sync subscription');
+        console.error(syncErr);
+      } finally {
+        setSyncing((prev) => {
+          const next = new Set(prev);
+          next.delete(subscription.id);
+          return next;
+        });
+      }
       setNewUrl('');
       setNewTitle('');
       setNewPrompt('');
@@ -480,15 +501,13 @@ export const FeedView: React.FC<FeedViewProps> = ({ onMediaAdded }) => {
                           🎯 "{sub.prompt}"
                         </div>
                       )}
-                      {sub.last_checked && (
-                        <div style={{
-                          fontSize: '11px',
-                          color: '#999',
-                          marginTop: '2px',
-                        }}>
-                          Last synced: {new Date(sub.last_checked * 1000).toLocaleString()}
-                        </div>
-                      )}
+                      <div style={{
+                        fontSize: '11px',
+                        color: '#999',
+                        marginTop: '2px',
+                      }}>
+                        Last synced: {formatDateTime(sub.last_checked)}
+                      </div>
                     </div>
 
                     <div style={{

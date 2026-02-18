@@ -1,8 +1,9 @@
 """
 Web content extraction service (articles/RSS)
 """
-from typing import Dict, List
-from urllib.parse import urlparse
+from typing import Dict, List, Optional
+from urllib.parse import urljoin, urlparse
+import re
 
 import feedparser
 import trafilatura
@@ -56,6 +57,14 @@ class WebExtractor:
         if not downloaded:
             raise Exception("Failed to fetch URL")
 
+        feed_url = self._discover_feed_url(downloaded, url)
+        if feed_url:
+            try:
+                return self._extract_feed(feed_url)
+            except Exception:
+                # Fallback to page extraction if feed parsing fails
+                pass
+
         extracted = trafilatura.extract(downloaded, include_comments=False, include_tables=False)
         if not extracted:
             raise Exception("Failed to extract readable text")
@@ -66,3 +75,18 @@ class WebExtractor:
             'title': title,
             'text': extracted,
         }
+
+    def _discover_feed_url(self, html: str, base_url: str) -> Optional[str]:
+        if not html:
+            return None
+        link_tags = re.findall(r"<link[^>]+>", html, flags=re.IGNORECASE)
+        for tag in link_tags:
+            if not re.search(r"rel=[\"']alternate[\"']", tag, flags=re.IGNORECASE):
+                continue
+            if not re.search(r"type=[\"']application/(rss|atom)\+xml[\"']", tag, flags=re.IGNORECASE):
+                continue
+            href_match = re.search(r"href=[\"']([^\"']+)[\"']", tag, flags=re.IGNORECASE)
+            if not href_match:
+                continue
+            return urljoin(base_url, href_match.group(1))
+        return None

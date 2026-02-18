@@ -36,7 +36,7 @@ export interface Subscription {
   id: string;
   url: string;
   title: string;
-  lastChecked: number;
+  lastChecked: string | null;
   type: 'channel' | 'site';
   description?: string;
   prompt?: string;
