@@ -1,18 +1,17 @@
 FROM python:3.11-slim
 
-# Install system dependencies
+# Install minimal system dependencies
 RUN apt-get update && apt-get install -y \
-    ffmpeg \
-    libchromaprint-tools \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Copy requirements
-COPY backend/requirements.txt .
+# Copy lightweight requirements (no ML/torch/whisper)
+COPY backend/requirements-gateway.txt .
 
 # Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements-gateway.txt
 
 # Copy application code
 COPY backend /app/backend

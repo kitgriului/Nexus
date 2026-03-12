@@ -32,10 +32,10 @@ async def chat(
     """
     Chat with Nexus AI using archive context
     """
-    if not settings.GEMINI_API_KEY:
+    if not settings.GEMINI_API_KEY and not settings.OPENAI_API_KEY:
         raise HTTPException(
             status_code=503,
-            detail="GEMINI_API_KEY is not set. Chat is unavailable."
+            detail="No LLM API key configured. Set GEMINI_API_KEY or OPENAI_API_KEY."
         )
     # Save user message
     user_msg = ChatMessage(
@@ -52,10 +52,10 @@ async def chat(
             db=db,
             max_context_items=request.max_context_items
         )
-    except Exception:
+    except Exception as e:
         raise HTTPException(
             status_code=502,
-            detail="Gemini request failed. Check GEMINI_API_KEY and try again."
+            detail=f"LLM request failed: {str(e)}"
         )
     
     # Save assistant message

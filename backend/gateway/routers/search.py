@@ -73,11 +73,11 @@ async def semantic_search(
     
     return [
         {
-            "id": row.id,
-            "title": row.title,
+            "id": str(row.id),
+            "title": row.title or "",
             "ai_summary": row.ai_summary or "",
             "tags": row.tags or [],
-            "similarity": round(row.similarity, 3)
+            "similarity": round(float(row.similarity), 3)
         }
         for row in results
     ]

@@ -93,6 +93,22 @@ def init_db():
             """))
             conn.commit()
     
+    # Apply SQL migrations
+    migrations_dir = os.path.join(os.path.dirname(__file__), 'migrations')
+    if os.path.isdir(migrations_dir):
+        migration_files = sorted(f for f in os.listdir(migrations_dir) if f.endswith('.sql'))
+        for mf in migration_files:
+            with open(os.path.join(migrations_dir, mf), 'r') as f:
+                sql = f.read()
+            with engine.connect() as conn:
+                try:
+                    conn.execute(text(sql))
+                    conn.commit()
+                    print(f"✅ Migration applied: {mf}")
+                except Exception as e:
+                    conn.rollback()
+                    print(f"⚠️  Migration {mf} skipped: {e}")
+
     print("✅ Database initialized successfully")
 
 

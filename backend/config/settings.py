@@ -35,13 +35,14 @@ class Settings(BaseSettings):
     MINIO_BUCKET: str = "nexus-media"
     MINIO_SECURE: bool = False  # Use HTTPS
     
-    # OpenAI (for Whisper API)
+    # OpenAI (for Whisper API + Chat + Embeddings)
     OPENAI_API_KEY: Optional[str] = None
+    OPENAI_BASE_URL: Optional[str] = None  # Override for proxy (e.g. Manus LLM proxy)
     
     # Google Gemini
     GEMINI_API_KEY: Optional[str] = None
     GEMINI_MODEL: str = "gemini-2.0-flash"
-    VECTOR_DIMENSION: int = 768
+    VECTOR_DIMENSION: int = 384  # sentence-transformers all-MiniLM-L6-v2
     
     # Whisper Configuration
     WHISPER_MODE: str = "api"  # "api" or "local"

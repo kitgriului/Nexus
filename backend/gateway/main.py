@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 
 from backend.config.settings import settings
 from backend.db.database import init_db
-from backend.gateway.routers import media, search, chat, health, websocket, subscriptions
+from backend.gateway.routers import media, search, chat, health, websocket, subscriptions, categories, notes
 
 
 @asynccontextmanager
@@ -46,6 +46,8 @@ app.include_router(search.router, prefix=settings.API_PREFIX, tags=["search"])
 app.include_router(chat.router, prefix=settings.API_PREFIX, tags=["chat"])
 app.include_router(subscriptions.router, prefix=settings.API_PREFIX, tags=["subscriptions"])
 app.include_router(websocket.router, tags=["websocket"])
+app.include_router(categories.router, prefix=settings.API_PREFIX, tags=["categories"])
+app.include_router(notes.router, prefix=settings.API_PREFIX, tags=["notes"])
 
 
 # Global exception handler

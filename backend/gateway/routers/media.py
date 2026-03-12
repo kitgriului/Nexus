@@ -49,7 +49,8 @@ class MediaResponse(BaseModel):
     created_at: datetime
     origin: str
     subscription_id: Optional[str]
-    
+    category_id: Optional[str] = None
+
     class Config:
         from_attributes = True
 
@@ -171,15 +172,21 @@ async def list_media(
     skip: int = 0,
     limit: int = 50,
     status: Optional[str] = None,
+    category_id: Optional[str] = None,
+    type: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
     """
-    List all media items
+    List all media items (excludes plain text notes — use /notes for those)
     """
-    query = db.query(MediaItem)
+    query = db.query(MediaItem).filter(MediaItem.type != 'note')
     if status:
         query = query.filter(MediaItem.status == status)
-    
+    if category_id:
+        query = query.filter(MediaItem.category_id == category_id)
+    if type:
+        query = query.filter(MediaItem.type == type)
+
     items = query.order_by(MediaItem.created_at.desc()).offset(skip).limit(limit).all()
     return items
 

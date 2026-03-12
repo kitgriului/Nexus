@@ -1,60 +1,84 @@
+// ── Core domain types ─────────────────────────────────────────────────────────
 
-export type MediaType = 'audio' | 'video' | 'youtube' | 'instagram' | 'web_source' | 'chat_session';
-export type TranscriptSource = 'whisper' | 'youtube_captions' | 'gemini' | 'none';
-export type SourceType = 'mic_audio' | 'uploaded_audio' | 'youtube_url' | 'link';
+export type ContentType = 'note' | 'audio' | 'video' | 'youtube' | 'web' | 'podcast' | 'instagram';
 
-export interface SpeakerTurn {
-  speaker: string;
-  text: string;
-  startTime: number;
-  endTime: number;
+export interface Category {
+  id: string;
+  name: string;
+  description?: string;
+  color?: string;
+  icon?: string;
+  parent_id?: string;
+  created_at: string;
+  item_count: number;
 }
-
-export type MediaStatus = 'pending' | 'processing' | 'completed' | 'error' | 'deferred_summary';
 
 export interface MediaItem {
   id: string;
   title: string;
-  type: MediaType;
-  sourceType: SourceType;
-  transcriptSource: TranscriptSource;
-  sourceUrl: string; 
+  type: ContentType;
+  source_type: string;
+  source_url?: string;
   duration: number;
-  rawText?: string; // Полный неразмеченный текст
-  transcription?: SpeakerTurn[];
-  transcriptHash?: string;
-  createdAt: number;
-  importedAt: number;
-  aiSummary?: string;
-  status: MediaStatus;
-  origin: 'manual' | 'subscription';
-  subscriptionId?: string;
+  raw_text?: string;
+  ai_summary?: string;
   tags: string[];
+  status: 'pending' | 'processing' | 'completed' | 'error';
+  created_at: string;
+  updated_at?: string;
+  origin: string;
+  subscription_id?: string;
+  category_id?: string;
+}
+
+export interface ChatMessage {
+  id?: string;
+  role: 'user' | 'assistant';
+  text: string;
+  context_media_ids?: string[];
+  timestamp?: string;
+}
+
+export interface JobStatus {
+  job_id: string;
+  media_id: string;
+  status: string;
+  current_stage?: string;
+  progress_percent: number;
+  error_message?: string;
+  celery_task_id?: string;
+}
+
+export interface SearchResult {
+  id: string;
+  title: string;
+  ai_summary: string;
+  tags: string[];
+  similarity: number;
+  type?: ContentType;
 }
 
 export interface Subscription {
   id: string;
   url: string;
   title: string;
-  lastChecked: string | null;
-  type: 'channel' | 'site';
+  type: string;
   description?: string;
   prompt?: string;
-  periodDays?: number;
+  period_days: number;
+  last_checked?: string;
+  sync_enabled: boolean;
+  created_at: string;
 }
 
-export interface ChatMessage {
-  id: string;
-  role: 'user' | 'assistant';
-  text: string;
-  timestamp: number;
-}
+// ── UI state types ────────────────────────────────────────────────────────────
 
-export interface Activity {
+export type ActiveView = 'chat' | 'notes' | 'media' | 'search' | 'feeds';
+
+export interface ProcessingJobUI {
   id: string;
-  entityId: string;
-  entityType: 'media' | 'chat';
-  action: 'create' | 'sync' | 'chat';
-  description: string;
-  timestamp: number;
+  mediaId: string;
+  status: string;
+  progress: number;
+  title: string;
 }
